@@ -6,9 +6,13 @@
 
 Deze repository bevat een productieklare **MVP** van V.E.R.A., met als eerste concrete
 usecase de **jeugdconsulent bij gemeenten** en het documenttype **Onderzoeksverslag**. De
-architectuur is bewust modulair opgezet zodat andere vakgebieden (Wmo, participatie,
-schuldhulpverlening, leerplicht) en andere documenttypen later toegevoegd kunnen worden
-via database-configuratie — niet door de applicatie te herschrijven.
+architectuur is bewust modulair opgezet zodat andere vakgebieden en documenttypen later
+toegevoegd kunnen worden via database-configuratie — niet door de applicatie te
+herschrijven. Inmiddels zijn ook **Wmo**, **Participatie**, **Schuldhulpverlening** en
+**Leerplicht** geseed (zie `prisma/seed.ts`), elk met een eigen standaardformat. Daarnaast
+kan elke organisatie zelf een **eigen Word-sjabloon uploaden** (stap 1 van de workflow) —
+de koppen in dat sjabloon worden automatisch de hoofdstukstructuur waarin de AI de
+aantekeningen structureert (zie hoofdstuk 2 en 3).
 
 ---
 
@@ -60,6 +64,17 @@ Een nieuw vakgebied, documenttype of gemeentevariant toevoegen = een nieuwe rij 
 applicatiecode gewijzigd te worden. De configuratie-types staan in
 `src/lib/formats/types.ts` (zod-schema's die de JSON-kolommen valideren).
 
+`FormatTemplate.organizationId` maakt onderscheid tussen **gedeelde** formats (`null` —
+zichtbaar voor iedereen, zoals de seed-formats) en **organisatie-eigen** formats
+(niet-`null` — alleen zichtbaar voor die organisatie). Dat laatste is precies hoe
+sjabloon-upload werkt: `POST /api/formats/from-template` (`src/lib/formats/templateExtraction.ts`)
+haalt de Word-koppen (Kop 1/Kop 2/Kop 3) uit een geüpload .docx-bestand met `mammoth`,
+neemt het hoogste kopniveau als hoofdstukken, en slaat dat op als een nieuwe, org-eigen
+`FormatTemplate` — met generieke validator-regels (`buildGenericValidatorRules`, minimaal 1
+bewering per hoofdstuk) omdat we voor een willekeurig sjabloon geen domeinkennis hebben.
+Het geüploade sjabloon wordt zo letterlijk de structuur waarin de AI de aantekeningen
+opmaakt, met dezelfde zero-fabrication-waarborgen als elk ander format (hoofdstuk 3).
+
 ### AIProvider-abstractie
 
 Alle AI-aanroepen lopen via de interface `AIProvider` (`src/lib/ai/provider.ts`). De enige
@@ -72,10 +87,10 @@ applicatie (validators, API-routes, UI) hoeft niet te wijzigen.
 
 ```
 prisma/schema.prisma        Datamodel
-prisma/seed.ts               Seed: vakgebied "Jeugd" → "Onderzoeksverslag" → standaardformat
+prisma/seed.ts               Seed: 5 vakgebieden (Jeugd, Wmo, Participatie, Schuldhulp, Leerplicht)
 prisma.config.ts             Prisma 7 config (migraties via DIRECT_URL)
 src/lib/ai/                  AIProvider-interface, OpenAI-implementatie, schema, prompt, segmentatie
-src/lib/formats/             Config-types voor FormatTemplate
+src/lib/formats/             Config-types voor FormatTemplate + sjabloon-upload-extractie (templateExtraction.ts)
 src/lib/validators/          Deterministische (niet-AI) volledigheidsvalidatie
 src/lib/auth/                Wachtwoorden, sessie-JWT, CSRF, guard-helpers
 src/lib/security/            Rate limiting, audit-logging
@@ -101,7 +116,10 @@ tabs binnen één pagina per rapport (`/reports/[id]`), met een voortgangsindica
 al bereikte stappen aanklikbaar maakt:
 
 1. **Instellingen** — vakgebied, documenttype, format (gemeente/variant) en schrijfstijl
-   kiezen (`/reports/new`), plus checklist-/voetnoot-opties.
+   kiezen (`/reports/new`), plus checklist-/voetnoot-opties. Hier kan een organisatie ook
+   **een eigen .docx-sjabloon uploaden**: de Word-koppen (Kop 1/Kop 2) in dat sjabloon
+   worden automatisch een nieuw, org-eigen format (zie "Sjabloon-upload" in hoofdstuk 3),
+   dat meteen als optie verschijnt bij het gekozen documenttype.
 2. **Broninformatie** — aantekeningen plakken of `.docx`-bestanden uploaden, met validatie
    op bestandsgrootte, aantal bestanden en totale invoerlengte.
 3. **AI-analyse** — de AI structureert de bronnen tot een conceptverslag volgens het
@@ -301,6 +319,17 @@ opgegeven spec. Onderstaande keuzes/aannames zijn daarbij gemaakt:
     nu dynamisch i.p.v. statisch prerenderd), maar dat weegt niet op tegen
     een kapotte UI. Lokaal geverifieerd door de gebouwde HTML te inspecteren
     op nonce-consistentie vóór het pushen.
+15. **Sjabloon-upload herkent alleen Word-kopstijlen, geen platte opmaak.** De
+    hoofdstukextractie uit een geüpload .docx-sjabloon (`headingsToChapterDefinitions`)
+    leest de officiële Word-kopstijlen (Kop 1/Kop 2/Kop 3) uit; een sjabloon met alleen
+    vetgedrukte tekst zonder kopstijl levert geen hoofdstukken op (met een duidelijke
+    foutmelding die daarnaar verwijst). Dit is een bewuste, eenvoudige eerste versie —
+    een layout-heuristiek (bv. korte, vetgedrukte regels als fallback) zou vervolgwerk zijn.
+    Ook krijgt elk hoofdstuk uit een sjabloon generieke AI-instructies en generieke
+    validator-regels (minimaal 1 bewering, geen verplichte categorie) — voor de seed-formats
+    is dat domeinspecifiek uitgeschreven, voor een willekeurig geüpload sjabloon kan dat niet.
+    Sub-kopjes (een dieper kopniveau dan het hoogste in het document) worden genegeerd,
+    niet als apart hoofdstuk behandeld.
 
 ---
 
@@ -313,7 +342,7 @@ cp .env.example .env
 # AUTH_SECRET en (voor de AI-analyse) een echte OPENAI_API_KEY.
 
 npx prisma migrate dev --name init   # eerste keer; maakt/actualiseert het schema
-npm run db:seed                       # vult vakgebied "Jeugd" → "Onderzoeksverslag"
+npm run db:seed                       # vult de 5 vakgebieden (Jeugd, Wmo, Participatie, Schuldhulp, Leerplicht)
 
 npm run dev                           # start op http://localhost:3000
 ```
@@ -330,13 +359,16 @@ voor zowel `DATABASE_URL` als `DIRECT_URL`.
 npm run lint         # ESLint
 npm run typecheck     # tsc --noEmit
 npm run build          # next build (compileert + type-checkt + genereert de routetabel)
-npm test               # Vitest — 59 tests
+npm test               # Vitest — 65 tests
 ```
 
 De testsuite (`tests/`) dekt:
 
 - **Schema-synchronisatie** (`schema-sync.test.ts`) — zod ↔ OpenAI-schema, inclusief de
   enum-beperking op hoofdstukken én bronverwijzingen.
+- **Sjabloon-extractie** (`template-extraction.test.ts`) — Word-koppen uit een (met de
+  `docx`-package gegenereerd) testdocument halen, alleen het hoogste kopniveau meenemen,
+  unieke hoofdstuk-keys ook bij dubbele titels.
 - **Deterministische validators** (`validators.test.ts`) — hoofdstukstatus, detectie van
   niet-bestaande bronverwijzingen, hoofdstuk-key-volledigheid.
 - **Uploadvalidatie** (`upload-validation.test.ts`) — bestandsgrootte, type, aantal,
@@ -478,6 +510,9 @@ van een softwareoplevering vallen:
 
 - Volledige 5-stappen-workflow: instellingen → bronnen → AI-analyse → controle/bewerking →
   Word-export.
+- 5 geseede vakgebieden (Jeugd, Wmo, Participatie, Schuldhulpverlening, Leerplicht), elk met
+  een eigen standaardformat, plus sjabloon-upload waarmee een organisatie een eigen
+  .docx-sjabloon kan uploaden dat automatisch een nieuw, org-eigen format wordt.
 - Registratie/login/logout, CSRF-bescherming, IDOR-veilige organisatie-isolatie,
   zelfbedieningsverwijdering van eigen data.
 - Zero-fabrication AI-integratie met structureel (schema-niveau) afgedwongen
@@ -485,7 +520,7 @@ van een softwareoplevering vallen:
 - Deterministische hoofdstukvalidatie, configureerbaar per format.
 - Word-export met titelpagina, versienummer, optionele checklist en conceptvoetnoot.
 - Retentie-purge-script voor privacy-by-design.
-- 59 automatische tests, allemaal groen; losse eval-harness voor promptkwaliteit; 20
+- 65 automatische tests, allemaal groen; losse eval-harness voor promptkwaliteit; 20
   fictieve testcasussen.
 - `next build`, `npm run lint`, `npm run typecheck` allemaal foutloos.
 - Handmatige end-to-end smoke-test uitgevoerd tegen de gebouwde productie-server

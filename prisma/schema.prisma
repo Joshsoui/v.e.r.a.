@@ -63,9 +63,10 @@ model Organization {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  users     User[]
-  reports   Report[]
-  auditLogs AuditLog[]
+  users           User[]
+  reports         Report[]
+  auditLogs       AuditLog[]
+  formatTemplates FormatTemplate[]
 
   @@map("organizations")
 }
@@ -126,6 +127,12 @@ model FormatTemplate {
   municipality   String?
   isDefault      Boolean  @default(false)
 
+  /// null = gedeeld/globaal format (zichtbaar voor alle organisaties, zoals de
+  /// seed-formats). Niet-null = eigen, uit een geüpload .docx-sjabloon
+  /// gegenereerd format, uitsluitend zichtbaar voor deze organisatie.
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   /// ChapterDefinition[] — zie src/lib/formats/types.ts
   chapters Json
 
@@ -141,6 +148,7 @@ model FormatTemplate {
   reports Report[]
 
   @@index([documentTypeId])
+  @@index([organizationId])
   @@map("format_templates")
 }
 

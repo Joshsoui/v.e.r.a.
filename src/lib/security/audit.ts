@@ -29,6 +29,7 @@ export type AuditAction =
   | "report.ai_analyze"
   | "report.chapter_update"
   | "report.export"
+  | "format.create_from_template"
   | "report.delete"
   | "account.data_delete";
 

@@ -7,9 +7,10 @@ export const dynamic = "force-dynamic";
 
 /**
  * Levert de volledige, actieve configuratieboom (vakgebied -> documenttype ->
- * formats) voor stap 1 van de workflow. Formats zijn geen organisatie-
- * gebonden data (geen dossierinhoud), dus geen org-filtering nodig — enkel
- * een geldige sessie.
+ * formats) voor stap 1 van de workflow. Formats zijn in principe gedeelde
+ * configuratie (geen dossierinhoud), behalve uit een sjabloon gegenereerde
+ * formats (FormatTemplate.organizationId) — die zijn privé per organisatie,
+ * dus hier gescoped op sessie.
  */
 export async function GET() {
   try {
@@ -23,6 +24,9 @@ export async function GET() {
           orderBy: { name: "asc" },
           include: {
             formatTemplates: {
+              where: {
+                OR: [{ organizationId: null }, { organizationId: session.organizationId }],
+              },
               orderBy: [{ isDefault: "desc" }, { name: "asc" }],
             },
           },
