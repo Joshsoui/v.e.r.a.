@@ -32,7 +32,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <Image
           src="/logo.png"
           alt="V.E.R.A. — Verslag- en Rapportage Assistent"

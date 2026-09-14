@@ -33,13 +33,13 @@ export function AccountMenu({ userName, organizationName }: { userName: string; 
   }
 
   return (
-    <div className="flex items-center gap-3 text-sm">
+    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 text-sm">
       <div className="text-right">
         <div className="font-medium text-gray-800">{userName}</div>
         <div className="text-xs text-gray-500">{organizationName}</div>
       </div>
       {confirmingDelete ? (
-        <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-2 py-1">
+        <div className="flex flex-wrap items-center justify-end gap-2 rounded-md border border-red-200 bg-red-50 px-2 py-1">
           <span className="text-xs text-red-700">Al je rapporten definitief verwijderen?</span>
           <Button variant="danger" disabled={busy} onClick={deleteOwnData} className="px-2 py-1 text-xs">
             Ja, verwijderen
@@ -49,11 +49,11 @@ export function AccountMenu({ userName, organizationName }: { userName: string; 
           </Button>
         </div>
       ) : (
-        <Button variant="ghost" onClick={() => setConfirmingDelete(true)} className="text-xs">
+        <Button variant="ghost" onClick={() => setConfirmingDelete(true)} className="whitespace-nowrap text-xs">
           Mijn gegevens verwijderen
         </Button>
       )}
-      <Button variant="secondary" disabled={busy} onClick={logout} className="text-xs">
+      <Button variant="secondary" disabled={busy} onClick={logout} className="whitespace-nowrap text-xs">
         Uitloggen
       </Button>
     </div>
