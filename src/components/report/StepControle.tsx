@@ -85,7 +85,9 @@ function ChapterEditor({
         <div>
           <h3 className="font-semibold text-gray-800">{chapter.title}</h3>
           {chapter.issues.length > 0 && (
-            <p className="text-xs text-amber-700">{chapter.issues.length} aandachtspunt(en)</p>
+            <p className="text-xs text-amber-700">
+              {chapter.issues.length} {chapter.issues.length === 1 ? "aandachtspunt" : "aandachtspunten"}
+            </p>
           )}
         </div>
         <Badge variant={statusBadgeVariant(chapter.status)}>{STATUS_LABELS[chapter.status]}</Badge>
@@ -210,7 +212,7 @@ export function StepControle({
   if (report.chapters.length === 0) {
     return (
       <Card>
-        <Alert variant="info">Doorloop eerst stap 3 (AI-analyse) om hoofdstukken te genereren.</Alert>
+        <Alert variant="info">Doorloop eerst stap 3 (VERA-analyse) om hoofdstukken te genereren.</Alert>
       </Card>
     );
   }

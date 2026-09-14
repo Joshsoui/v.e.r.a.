@@ -50,8 +50,10 @@ export function validateChapter(
   const issues: string[] = [];
 
   if (chapter.statements.length < effectiveRules.minStatements) {
+    const expectedNoun = effectiveRules.minStatements === 1 ? "onderdeel" : "onderdelen";
+    const foundNoun = chapter.statements.length === 1 ? "onderdeel" : "onderdelen";
     issues.push(
-      `Minimaal ${effectiveRules.minStatements} onderde(e)l/delen verwacht in dit hoofdstuk, ${chapter.statements.length} gevonden.`,
+      `Minimaal ${effectiveRules.minStatements} ${expectedNoun} verwacht in dit hoofdstuk, ${chapter.statements.length} ${foundNoun} gevonden.`,
     );
   }
 
@@ -72,9 +74,11 @@ export function validateChapter(
   }
 
   if (effectiveRules.forbidMissingInfo && chapter.missingInfo.length > 0) {
-    issues.push(
-      `${chapter.missingInfo.length} ontbrekend(e) punt(en) gesignaleerd die nog aangevuld moeten worden.`,
-    );
+    const clause =
+      chapter.missingInfo.length === 1
+        ? "1 ontbrekend punt gesignaleerd dat nog aangevuld moet worden."
+        : `${chapter.missingInfo.length} ontbrekende punten gesignaleerd die nog aangevuld moeten worden.`;
+    issues.push(clause);
   }
 
   return {

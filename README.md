@@ -195,7 +195,9 @@ Dit is het meest kritieke onderdeel van V.E.R.A. en op meerdere niveaus afgedwon
 - **Zelfbedieningsendpoint**: `DELETE /api/account/data` verwijdert alle eigen rapporten
   (inclusief bronnen en hoofdstukinhoud, via cascade) van de ingelogde gebruiker — nooit
   data van collega's. Ook een los rapport is te verwijderen via `DELETE /api/reports/:id`.
-  Beide zijn ook vanuit de UI bereikbaar (dashboard-menu, resp. binnen een rapport).
+  Beide zijn ook vanuit de UI bereikbaar: het account-menu op het dashboard voor alle
+  eigen data, en een "Verwijderen"-knop per rapport in de rapportenlijst voor een los
+  rapport.
 
 ### Auth & autorisatie
 

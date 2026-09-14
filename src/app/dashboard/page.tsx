@@ -3,12 +3,13 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { AccountMenu } from "@/components/AccountMenu";
-import { Button, Card, Badge } from "@/components/ui/primitives";
+import { ReportListItem } from "@/components/ReportListItem";
+import { Button, Card } from "@/components/ui/primitives";
 
 const STATUS_LABELS: Record<string, string> = {
   INSTELLINGEN: "Instellingen",
   BRONNEN: "Broninformatie",
-  AI_ANALYSE: "AI-analyse",
+  AI_ANALYSE: "VERA-analyse",
   CONTROLE: "Controle en bewerking",
   GEEXPORTEERD: "Geëxporteerd",
 };
@@ -54,21 +55,15 @@ export default async function DashboardPage() {
       ) : (
         <div className="space-y-3">
           {reports.map((report) => (
-            <Link key={report.id} href={`/reports/${report.id}`} className="block">
-              <Card className="transition hover:border-vera-300 hover:shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-gray-800">{report.title}</div>
-                    <div className="text-xs text-gray-500">
-                      {report.formatTemplate.documentType.name} — {report.formatTemplate.name}
-                    </div>
-                  </div>
-                  <Badge variant={report.status === "GEEXPORTEERD" ? "success" : "neutral"}>
-                    {STATUS_LABELS[report.status] ?? report.status}
-                  </Badge>
-                </div>
-              </Card>
-            </Link>
+            <ReportListItem
+              key={report.id}
+              reportId={report.id}
+              title={report.title}
+              documentTypeName={report.formatTemplate.documentType.name}
+              formatName={report.formatTemplate.name}
+              statusLabel={STATUS_LABELS[report.status] ?? report.status}
+              statusVariant={report.status === "GEEXPORTEERD" ? "success" : "neutral"}
+            />
           ))}
         </div>
       )}

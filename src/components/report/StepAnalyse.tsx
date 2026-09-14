@@ -20,7 +20,7 @@ export function StepAnalyse({
     try {
       await onAnalyze();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "AI-analyse mislukt.");
+      setError(err instanceof Error ? err.message : "VERA-analyse mislukt.");
     } finally {
       setBusy(false);
     }
@@ -31,7 +31,7 @@ export function StepAnalyse({
   return (
     <Card className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-gray-800">AI-analyse</h2>
+        <h2 className="text-lg font-semibold text-gray-800">VERA-analyse</h2>
         <p className="text-sm text-gray-500">
           V.E.R.A. structureert de {report.sources.length} aangeleverde bron(nen) tot een conceptverslag
           volgens het format &quot;{report.formatTemplate.name}&quot;. Elke bewering wordt gecategoriseerd
@@ -50,7 +50,7 @@ export function StepAnalyse({
       )}
 
       <Button disabled={busy} onClick={run}>
-        {busy ? "Analyse loopt... (dit kan even duren)" : alreadyAnalyzed ? "Opnieuw analyseren" : "Start AI-analyse"}
+        {busy ? "Analyse loopt... (dit kan even duren)" : alreadyAnalyzed ? "Opnieuw analyseren" : "Start VERA-analyse"}
       </Button>
     </Card>
   );

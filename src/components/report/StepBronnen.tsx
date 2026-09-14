@@ -147,7 +147,7 @@ export function StepBronnen({
       </div>
 
       <Button disabled={busy || report.sources.length === 0} onClick={onAdvance}>
-        Verder naar AI-analyse →
+        Verder naar VERA-analyse →
       </Button>
     </Card>
   );

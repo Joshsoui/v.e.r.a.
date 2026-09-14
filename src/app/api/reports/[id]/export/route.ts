@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const report = await getReportOrThrow(id, session);
 
     if (report.chapters.length === 0) {
-      throw new ApiError(400, "Er is nog geen inhoud gegenereerd voor dit rapport. Doorloop eerst de AI-analyse.");
+      throw new ApiError(400, "Er is nog geen inhoud gegenereerd voor dit rapport. Doorloop eerst de VERA-analyse.");
     }
 
     const organization = await prisma.organization.findUnique({

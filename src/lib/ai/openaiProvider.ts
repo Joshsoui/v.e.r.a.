@@ -53,7 +53,7 @@ export class OpenAIProvider implements AIProvider {
       console.error("OpenAI Responses API-aanroep mislukt:", err);
       throw new ApiError(
         502,
-        "De AI-analyse is mislukt. Probeer het later opnieuw.",
+        "De VERA-analyse is mislukt. Probeer het later opnieuw.",
         { cause: err },
       );
     }
@@ -61,7 +61,7 @@ export class OpenAIProvider implements AIProvider {
     if (response.status === "incomplete") {
       throw new ApiError(
         502,
-        "De AI-analyse kon niet volledig afgerond worden. Probeer het opnieuw, eventueel met minder brontekst.",
+        "De VERA-analyse kon niet volledig afgerond worden. Probeer het opnieuw, eventueel met minder brontekst.",
       );
     }
 

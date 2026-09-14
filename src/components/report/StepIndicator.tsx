@@ -3,7 +3,7 @@
 const STEPS = [
   { step: 1, label: "Instellingen" },
   { step: 2, label: "Broninformatie" },
-  { step: 3, label: "AI-analyse" },
+  { step: 3, label: "VERA-analyse" },
   { step: 4, label: "Controle en bewerking" },
   { step: 5, label: "Export" },
 ];
