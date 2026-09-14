@@ -15,10 +15,10 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
-    "db:seed": "node --env-file=.env --import tsx prisma/seed.ts",
+    "db:seed": "node --env-file-if-exists=.env --import tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "eval": "node --env-file=.env --import tsx scripts/eval-harness.ts",
-    "purge:expired": "node --env-file=.env --import tsx scripts/purge-expired.ts",
+    "eval": "node --env-file-if-exists=.env --import tsx scripts/eval-harness.ts",
+    "purge:expired": "node --env-file-if-exists=.env --import tsx scripts/purge-expired.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
