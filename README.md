@@ -272,6 +272,24 @@ opgegeven spec. Onderstaande keuzes/aannames zijn daarbij gemaakt:
 11. **Render-regio `frankfurt` en plan `starter`** als redelijke defaults voor een
     Nederlandse gemeentelijke toepassing (EU-dataresidentie); pas aan naar wens in
     `render.yaml` of het Render-dashboard.
+12. **Build-time devDependencies staan bewust in `dependencies`.** `NODE_ENV=production`
+    (die we zelf als env var instellen) zorgt ervoor dat `npm install` devDependencies
+    overslaat. Omdat `next build` zelf tools als TypeScript, Tailwind/PostCSS en de Prisma
+    CLI nodig heeft, staan die in `dependencies` — alleen test-only tooling (`vitest`,
+    `eslint`, ...) blijft in `devDependencies`. Om te voorkomen dat Next's eigen
+    typecheck-stap tijdens de build daardoor over `tests/` struikelt (die `vitest`
+    importeren), typecheckt `next build` alleen `src/`/`prisma`/`scripts`
+    (`tsconfig.json`), terwijl `npm run typecheck` het hele project incl. tests
+    controleert via `tsconfig.test.json`. Dit is lokaal expliciet nagebouwd met een
+    productie-only `npm install` vóór het pushen.
+13. **Supabase direct connection is IPv6-only.** Render's build-omgeving ondersteunt geen
+    uitgaand IPv6, dus de poort-5432 "Direct connection" van Supabase (nodig voor
+    `DIRECT_URL`/migraties) is vanaf Render onbereikbaar. Gebruik in plaats daarvan
+    Supabase's **Session pooler**-string (zelfde host als de transaction pooler, ook
+    IPv4, maar poort 5432 met volledige sessie-/prepared-statement-ondersteuning) voor
+    `DIRECT_URL`. Zowel `DATABASE_URL` als `DIRECT_URL` gebruiken bij een Supavisor-pooler
+    (transaction én session) de gebruikersnaam `postgres.<project-ref>`, niet alleen
+    `postgres` — dat laatste geeft een P1000-authenticatiefout.
 
 ---
 

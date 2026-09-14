@@ -40,6 +40,8 @@
   "exclude": [
     "node_modules",
     ".next",
-    "coverage"
+    "coverage",
+    "tests",
+    "vitest.config.ts"
   ]
 }
