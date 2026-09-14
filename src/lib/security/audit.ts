@@ -23,6 +23,8 @@ export type AuditAction =
   | "auth.login"
   | "auth.login_failed"
   | "auth.logout"
+  | "auth.password_reset_requested"
+  | "auth.password_reset_completed"
   | "report.create"
   | "report.update_settings"
   | "report.sources_upload"

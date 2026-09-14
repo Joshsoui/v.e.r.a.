@@ -237,6 +237,12 @@ Dit is het meest kritieke onderdeel van V.E.R.A. en op meerdere niveaus afgedwon
 
 - Registratie/login met bcrypt (12 salt-rounds) en een JWT-sessiecookie (httpOnly, secure
   in productie, SameSite=Lax, 12 uur geldig, ondertekend met `AUTH_SECRET`).
+- **Wachtwoord vergeten** (`/forgot-password` → `/reset-password`): een eenmalig bruikbaar,
+  SHA-256-gehasht token (nooit het raw token in de database) met een uur geldigheid,
+  zie `src/lib/auth/passwordReset.ts`. Een nieuwe aanvraag invalideert eerdere,
+  nog niet gebruikte tokens van dezelfde gebruiker. De respons is bewust altijd identiek,
+  of het opgegeven e-mailadres nu bestaat of niet (zelfde anti-enumeratie-redenering als
+  bij login). Er is nog geen e-mailprovider gekoppeld — zie de pre-productiechecklist.
 - **CSRF-bescherming**: double-submit-cookiepatroon. Elke state-wijzigende request moet de
   waarde van een niet-httpOnly `vera_csrf`-cookie terugsturen in de `x-csrf-token`-header;
   dit wordt op elke mutatie-route gecontroleerd (`verifyCsrf()` / `requireSession()`).
@@ -535,9 +541,15 @@ van een softwareoplevering vallen:
 - [ ] **Toegangsbeheer**: rollen/rechten binnen een organisatie (nu: iedere geregistreerde
       gebruiker is `BEHEERDER` van zijn eigen, eigen-gemaakte organisatie) uitgebreid met
       een uitnodigingsflow en eventueel fijnmaziger rechtenmodel per team.
-- [ ] **Wachtwoordbeleid** aangescherpt (nu: minimaal 10 tekens, geen 2FA,
-      geen wachtwoord-reset-flow) — voeg minimaal 2FA en een reset-flow toe vóór
-      productiegebruik.
+- [ ] **E-mailprovider aansluiten voor de wachtwoord-resetflow.** De resetflow zelf
+      bestaat (`/forgot-password`, `/reset-password`, eenmalig bruikbare tokens met een
+      uur geldigheid, zie `src/lib/auth/passwordReset.ts`), maar er is nog geen
+      e-mailprovider gekoppeld: de resetlink wordt nu naar de servers-logs geschreven
+      (`deliverResetLink()` in `src/app/api/auth/forgot-password/route.ts`) in plaats van
+      per e-mail verstuurd. Kies een provider (bv. Resend of het SMTP-account van de
+      gemeente) en vervang die functie — de rest van de flow hoeft niet te wijzigen.
+- [ ] **2FA** ontbreekt nog — overweeg dit toe te voegen vóór productiegebruik met
+      bijzondere persoonsgegevens.
 - [ ] **Logging/monitoring** aangesloten op het beveiligingsmonitoring-proces van de
       gemeente (nu: audit-logs alleen in de eigen database, geen externe SIEM-koppeling).
 - [ ] **Penetratietest / security-review** door een onafhankelijke partij, aanvullend op de

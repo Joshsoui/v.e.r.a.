@@ -82,11 +82,29 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  reports   Report[]
-  auditLogs AuditLog[]
+  reports             Report[]
+  auditLogs           AuditLog[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([organizationId])
   @@map("users")
+}
+
+/// Eenmalig te gebruiken, kortlevende token voor de "wachtwoord vergeten"-flow.
+/// Bevat uitdrukkelijk nooit het raw token, alleen een SHA-256-hash daarvan —
+/// zo is een tokendiefstal uit de database alleen niet direct bruikbaar.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 /// Vakgebied, bv. "jeugd", "wmo", "participatie", "schuldhulpverlening".
