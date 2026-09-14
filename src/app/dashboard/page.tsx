@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
@@ -32,10 +33,14 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
       <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-vera-800">V.E.R.A.</h1>
-          <p className="text-sm text-gray-500">Verslag- en Rapportage Assistent</p>
-        </div>
+        <Image
+          src="/logo.png"
+          alt="V.E.R.A. — Verslag- en Rapportage Assistent"
+          width={900}
+          height={303}
+          priority
+          className="h-10 w-auto"
+        />
         <AccountMenu userName={user.name} organizationName={user.organization.name} />
       </div>
 

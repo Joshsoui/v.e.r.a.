@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { apiJson } from "@/lib/client/apiFetch";
 import { Button, Input, Label, Card, Alert } from "@/components/ui/primitives";
 
@@ -34,9 +35,15 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-vera-800">V.E.R.A.</h1>
-        <p className="mt-1 text-sm text-gray-500">Verslag- en Rapportage Assistent</p>
+      <div className="mb-8 flex justify-center">
+        <Image
+          src="/logo.png"
+          alt="V.E.R.A. — Verslag- en Rapportage Assistent"
+          width={900}
+          height={303}
+          priority
+          className="h-14 w-auto"
+        />
       </div>
       <Card>
         <h2 className="mb-4 text-lg font-semibold">Inloggen</h2>
