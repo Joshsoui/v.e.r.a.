@@ -242,7 +242,9 @@ Dit is het meest kritieke onderdeel van V.E.R.A. en op meerdere niveaus afgedwon
   zie `src/lib/auth/passwordReset.ts`. Een nieuwe aanvraag invalideert eerdere,
   nog niet gebruikte tokens van dezelfde gebruiker. De respons is bewust altijd identiek,
   of het opgegeven e-mailadres nu bestaat of niet (zelfde anti-enumeratie-redenering als
-  bij login). Er is nog geen e-mailprovider gekoppeld — zie de pre-productiechecklist.
+  bij login). Verzending gaat via Resend (`src/lib/email/passwordResetEmail.ts`); zonder
+  `RESEND_API_KEY` valt dit automatisch terug op het loggen van de resetlink — zie de
+  pre-productiechecklist voor het activeren van echte verzending.
 - **CSRF-bescherming**: double-submit-cookiepatroon. Elke state-wijzigende request moet de
   waarde van een niet-httpOnly `vera_csrf`-cookie terugsturen in de `x-csrf-token`-header;
   dit wordt op elke mutatie-route gecontroleerd (`verifyCsrf()` / `requireSession()`).
@@ -541,13 +543,25 @@ van een softwareoplevering vallen:
 - [ ] **Toegangsbeheer**: rollen/rechten binnen een organisatie (nu: iedere geregistreerde
       gebruiker is `BEHEERDER` van zijn eigen, eigen-gemaakte organisatie) uitgebreid met
       een uitnodigingsflow en eventueel fijnmaziger rechtenmodel per team.
-- [ ] **E-mailprovider aansluiten voor de wachtwoord-resetflow.** De resetflow zelf
-      bestaat (`/forgot-password`, `/reset-password`, eenmalig bruikbare tokens met een
-      uur geldigheid, zie `src/lib/auth/passwordReset.ts`), maar er is nog geen
-      e-mailprovider gekoppeld: de resetlink wordt nu naar de servers-logs geschreven
-      (`deliverResetLink()` in `src/app/api/auth/forgot-password/route.ts`) in plaats van
-      per e-mail verstuurd. Kies een provider (bv. Resend of het SMTP-account van de
-      gemeente) en vervang die functie — de rest van de flow hoeft niet te wijzigen.
+- [ ] **RESEND_API_KEY invullen op Render.** De wachtwoord-resetflow bestaat
+      (`/forgot-password`, `/reset-password`, eenmalig bruikbare tokens met een uur
+      geldigheid, zie `src/lib/auth/passwordReset.ts`) en verstuurt de resetlink al via
+      [Resend](https://resend.com) (`src/lib/email/passwordResetEmail.ts`) — dit is alleen
+      nog niet actief omdat er geen API-sleutel is ingesteld. Zolang `RESEND_API_KEY` leeg
+      is, valt de app automatisch terug op het loggen van de resetlink naar de
+      server-logs, dus niets is stuk, maar er gaat ook geen echte e-mail uit. Om dit te
+      activeren:
+      1. Maak een gratis account aan op [resend.com](https://resend.com) (tot 3.000
+         e-mails/maand gratis) en genereer een API-sleutel.
+      2. Zet die sleutel als `RESEND_API_KEY` bij de env vars van de Render-service
+         (Dashboard → service → Environment) — deze staat al klaar in `render.yaml` als
+         `sync: false`, dus Render vraagt er zelf om.
+      3. Optioneel maar aan te raden voor productiegebruik: verifieer een eigen domein in
+         Resend en zet `RESEND_FROM_EMAIL` op een adres op dat domein (bv.
+         `"V.E.R.A. <noreply@jouwgemeente.nl>"`). Zonder eigen domein gebruikt de app
+         Resend's testafzender `onboarding@resend.dev`, die alleen aflevert aan het
+         e-mailadres waarmee het Resend-account zelf is aangemaakt — geschikt om te
+         testen, niet voor echte gebruikers.
 - [ ] **2FA** ontbreekt nog — overweeg dit toe te voegen vóór productiegebruik met
       bijzondere persoonsgegevens.
 - [ ] **Logging/monitoring** aangesloten op het beveiligingsmonitoring-proces van de
@@ -631,6 +645,7 @@ npm run start (op een test-poort) + curl-smoketest van de volledige flow
 | `DATABASE_URL`    | Supabase **pooled** connection string (poort 6543, `?pgbouncer=true`) |
 | `DIRECT_URL`      | Supabase **directe** connection string (poort 5432)             |
 | `OPENAI_API_KEY`  | Jouw OpenAI API-sleutel                                          |
+| `RESEND_API_KEY`  | Optioneel — jouw Resend API-sleutel, voor echte wachtwoord-reset-e-mails (leeg = terugval op loggen, zie hoofdstuk 9) |
 
 **Automatisch geregeld, geen actie nodig:**
 
@@ -643,7 +658,7 @@ npm run start (op een test-poort) + curl-smoketest van de volledige flow
 `NODE_ENV`, `AUTH_COOKIE_NAME`, `OPENAI_MODEL`, `OPENAI_TIMEOUT_MS`, `APP_BASE_URL`,
 `RATE_LIMIT_AI_MAX`, `RATE_LIMIT_AI_WINDOW_MS`, `RATE_LIMIT_AUTH_MAX`,
 `RATE_LIMIT_AUTH_WINDOW_MS`, `MAX_UPLOAD_FILE_SIZE_BYTES`, `MAX_SOURCE_FILES_PER_REPORT`,
-`MAX_TOTAL_INPUT_CHARS`, `REPORT_RETENTION_DAYS`.
+`MAX_TOTAL_INPUT_CHARS`, `REPORT_RETENTION_DAYS`, `RESEND_FROM_EMAIL`.
 
 Zie `.env.example` voor de volledige lijst met toelichting per variabele (voor lokaal
 gebruik).

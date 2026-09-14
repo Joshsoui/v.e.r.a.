@@ -77,4 +77,14 @@ export const env = {
   get reportRetentionDays() {
     return intOr("REPORT_RETENTION_DAYS", 30);
   },
+  /// Leeg = geen e-mailprovider gekoppeld (verwacht tijdens ontwikkeling/tot
+  /// een gemeente een Resend-account aanmaakt). De wachtwoord-resetflow valt
+  /// dan terug op het loggen van de resetlink — zie deliverResetLink() in
+  /// src/app/api/auth/forgot-password/route.ts.
+  get resendApiKey() {
+    return optional("RESEND_API_KEY", "");
+  },
+  get resendFromEmail() {
+    return optional("RESEND_FROM_EMAIL", "V.E.R.A. <onboarding@resend.dev>");
+  },
 };

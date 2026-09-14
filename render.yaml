@@ -1,9 +1,15 @@
 # Render Blueprint voor V.E.R.A.
 #
 # Eén webservice (Node-runtime). Geen databases-blok: de database draait
-# extern op Supabase. DATABASE_URL, DIRECT_URL, OPENAI_API_KEY staan bewust
-# op sync:false — die vul je zelf in het Render-dashboard in (zie README.md,
-# hoofdstuk "Render deploymenthandleiding").
+# extern op Supabase. DATABASE_URL, DIRECT_URL, OPENAI_API_KEY, RESEND_API_KEY
+# staan bewust op sync:false — die vul je zelf in het Render-dashboard in
+# (zie README.md, hoofdstuk "Render deploymenthandleiding").
+#
+# RESEND_API_KEY is optioneel: zonder deze sleutel werkt de app gewoon door,
+# maar valt de wachtwoord-resetflow terug op het loggen van de resetlink
+# (zie src/lib/email/passwordResetEmail.ts) in plaats van hem echt te
+# versturen. Vul hem pas in zodra je een Resend-account (of een ander
+# geverifieerd afzenderdomein) hebt.
 #
 # AUTH_SECRET staat op generateValue:true: Render genereert bij de eerste
 # deploy automatisch een sterke, willekeurige waarde. Dat is een bewuste
@@ -28,6 +34,8 @@ services:
       - key: DIRECT_URL
         sync: false
       - key: OPENAI_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
         sync: false
 
       # --- Automatisch gegenereerd door Render, nooit handmatig instellen ---
@@ -63,3 +71,9 @@ services:
         value: "60000"
       - key: REPORT_RETENTION_DAYS
         value: "30"
+      # Standaard: Resend's ingebouwde testafzender (werkt zonder eigen domein,
+      # maar Resend levert daarmee alleen af aan het e-mailadres waarmee het
+      # Resend-account zelf is aangemaakt). Zet dit om naar een adres op een
+      # in Resend geverifieerd eigen domein zodra dat is ingericht.
+      - key: RESEND_FROM_EMAIL
+        value: "V.E.R.A. <onboarding@resend.dev>"

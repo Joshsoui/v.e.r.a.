@@ -43,6 +43,7 @@
     "prisma": "^7.10.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "resend": "^6.28.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "zod": "^4.6.5"
