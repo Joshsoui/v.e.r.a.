@@ -1,0 +1,65 @@
+# Render Blueprint voor V.E.R.A.
+#
+# Eén webservice (Node-runtime). Geen databases-blok: de database draait
+# extern op Supabase. DATABASE_URL, DIRECT_URL, OPENAI_API_KEY staan bewust
+# op sync:false — die vul je zelf in het Render-dashboard in (zie README.md,
+# hoofdstuk "Render deploymenthandleiding").
+#
+# AUTH_SECRET staat op generateValue:true: Render genereert bij de eerste
+# deploy automatisch een sterke, willekeurige waarde. Dat is een bewuste
+# toevoeging bovenop de expliciet genoemde sync:false-variabelen — een
+# sessie-ondertekeningssleutel is net zo gevoelig als een API-sleutel en mag
+# nooit een vast/gedeeld default krijgen.
+
+services:
+  - type: web
+    name: vera-rapportage-assistent
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: npm install && npx prisma migrate deploy && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # --- Secrets: zelf invullen in het Render-dashboard ---
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+      # --- Automatisch gegenereerd door Render, nooit handmatig instellen ---
+      - key: AUTH_SECRET
+        generateValue: true
+
+      # --- Overige configuratie: werkende defaults, hieronder aan te passen ---
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_COOKIE_NAME
+        value: vera_session
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: OPENAI_TIMEOUT_MS
+        value: "45000"
+      # Leeg laten volstaat: de app valt automatisch terug op de door Render
+      # geïnjecteerde RENDER_EXTERNAL_URL. Alleen invullen bij een eigen domein.
+      - key: APP_BASE_URL
+        value: ""
+      - key: RATE_LIMIT_AI_MAX
+        value: "10"
+      - key: RATE_LIMIT_AI_WINDOW_MS
+        value: "3600000"
+      - key: RATE_LIMIT_AUTH_MAX
+        value: "10"
+      - key: RATE_LIMIT_AUTH_WINDOW_MS
+        value: "900000"
+      - key: MAX_UPLOAD_FILE_SIZE_BYTES
+        value: "5000000"
+      - key: MAX_SOURCE_FILES_PER_REPORT
+        value: "10"
+      - key: MAX_TOTAL_INPUT_CHARS
+        value: "60000"
+      - key: REPORT_RETENTION_DAYS
+        value: "30"

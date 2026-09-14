@@ -1,0 +1,238 @@
+// V.E.R.A. — Prisma schema
+//
+// Privacy-by-design (zie README, hoofdstuk Privacy & security):
+// - Dossierinhoud (SourceDocument, ReportChapter.statements/missingInfo) is
+//   TIJDELIJK: elk Report heeft een expliciete expiresAt en kan door de
+//   gebruiker of door de retentie-purge (scripts/purge-expired.ts) verwijderd
+//   worden. Na purge blijft alleen niet-inhoudelijke metadata over
+//   (organisatie, status, tellers, timestamps).
+// - Er worden bewust GEEN losse gevoelige velden gemodelleerd (géén BSN,
+//   géén geboortedatum, géén adres als structured kolom). Dergelijke gegevens
+//   kunnen alleen voorkomen binnen de vrije brontekst, en die brontekst is
+//   onderdeel van de tijdelijke, verwijderbare inhoud.
+// - Rapporttitels worden automatisch gegenereerd (documenttype + datum), nooit
+//   uit vrije, door de gebruiker getypte cliëntnamen, zodat ook na een purge
+//   de metadata geen herleidbare inhoud bevat.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Let op: sinds Prisma 7 hoort de connectie-URL niet meer in dit
+// schemabestand. Migraties gebruiken DIRECT_URL via prisma.config.ts; de
+// applicatie zelf gebruikt DATABASE_URL via een driver-adapter, zie
+// src/lib/db/prisma.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  MEDEWERKER
+  BEHEERDER
+}
+
+enum ChapterStatus {
+  NIET_GECONTROLEERD
+  ONVOLLEDIG
+  COMPLEET
+}
+
+enum ReportStatus {
+  INSTELLINGEN
+  BRONNEN
+  AI_ANALYSE
+  CONTROLE
+  GEEXPORTEERD
+}
+
+enum SourceType {
+  TEKST
+  DOCX
+}
+
+enum StatementCategory {
+  FEIT
+  VERKLARING
+  PROFESSIONELE_DUIDING
+}
+
+model Organization {
+  id           String   @id @default(cuid())
+  name         String
+  municipality String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users     User[]
+  reports   Report[]
+  auditLogs AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String   @unique
+  passwordHash   String
+  name           String
+  role           Role     @default(MEDEWERKER)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  reports   Report[]
+  auditLogs AuditLog[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+/// Vakgebied, bv. "jeugd", "wmo", "participatie", "schuldhulpverlening".
+model Discipline {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  documentTypes DocumentType[]
+
+  @@map("disciplines")
+}
+
+/// Documenttype binnen een vakgebied, bv. "onderzoeksverslag".
+model DocumentType {
+  id           String   @id @default(cuid())
+  disciplineId String
+  discipline   Discipline @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+  code         String
+  name         String
+  description  String?
+  createdAt    DateTime @default(now())
+
+  formatTemplates FormatTemplate[]
+
+  @@unique([disciplineId, code])
+  @@map("document_types")
+}
+
+/// Configureerbaar format: hoofdstukstructuur, schrijfstijlen en
+/// validator-regels. Nieuwe gemeenten/varianten = nieuwe rij, geen nieuwe code.
+model FormatTemplate {
+  id             String   @id @default(cuid())
+  documentTypeId String
+  documentType   DocumentType @relation(fields: [documentTypeId], references: [id], onDelete: Cascade)
+  name           String
+  municipality   String?
+  isDefault      Boolean  @default(false)
+
+  /// ChapterDefinition[] — zie src/lib/formats/types.ts
+  chapters Json
+
+  /// WritingStyleOption[]
+  writingStyles Json
+
+  /// Record<chapterKey, ValidatorRuleSet> — zie src/lib/validators
+  validatorRules Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reports Report[]
+
+  @@index([documentTypeId])
+  @@map("format_templates")
+}
+
+model Report {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  formatTemplateId   String
+  formatTemplate     FormatTemplate @relation(fields: [formatTemplateId], references: [id])
+
+  title              String
+  writingStyleKey    String?
+  status             ReportStatus @default(INSTELLINGEN)
+  currentStep        Int          @default(1)
+  version            Int          @default(1)
+  addChecklist       Boolean      @default(true)
+  addConceptFootnote Boolean      @default(true)
+
+  // Privacy-by-design retentie
+  expiresAt        DateTime
+  contentDeletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sources  SourceDocument[]
+  chapters ReportChapter[]
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("reports")
+}
+
+/// Brondocument (aantekeningen/gespreksnotities). Volledig onderdeel van de
+/// tijdelijke dossierinhoud — wordt bij purge/verwijdering hard verwijderd.
+model SourceDocument {
+  id            String     @id @default(cuid())
+  reportId      String
+  report        Report     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  filename      String
+  sourceType    SourceType
+  extractedText String     @db.Text
+  charCount     Int
+  createdAt     DateTime   @default(now())
+
+  @@index([reportId])
+  @@map("source_documents")
+}
+
+model ReportChapter {
+  id           String        @id @default(cuid())
+  reportId     String
+  report       Report        @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  key          String
+  title        String
+  order        Int
+
+  /// Statement[] (inhoud) — geleegd bij purge, zie scripts/purge-expired.ts
+  statements Json @default("[]")
+
+  /// string[] — door validators/AI gesignaleerde ontbrekende informatie
+  missingInfo Json @default("[]")
+
+  status       ChapterStatus @default(NIET_GECONTROLEERD)
+  editedByUser Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([reportId, key])
+  @@index([reportId])
+  @@map("report_chapters")
+}
+
+/// Audit-logging van acties. Bevat uitdrukkelijk NOOIT dossierinhoud.
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action         String
+  entityType     String?
+  entityId       String?
+  /// SHA-256 hash van het IP-adres, nooit het IP zelf.
+  ipHash         String?
+  createdAt      DateTime      @default(now())
+
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --color-vera-50: #f2f6fc;
+  --color-vera-100: #e2ebf9;
+  --color-vera-200: #c2d6f1;
+  --color-vera-300: #92b6e5;
+  --color-vera-400: #5b8fd4;
+  --color-vera-500: #3a6fc0;
+  --color-vera-600: #2955a3;
+  --color-vera-700: #234684;
+  --color-vera-800: #213c6c;
+  --color-vera-900: #1f345a;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background-color: #f7f8fa;
+  color: #1a1f2b;
+}
+
+.step-indicator-item[data-active="true"] {
+  background-color: var(--color-vera-600);
+  color: white;
+}
