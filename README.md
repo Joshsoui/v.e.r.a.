@@ -290,6 +290,17 @@ opgegeven spec. Onderstaande keuzes/aannames zijn daarbij gemaakt:
     `DIRECT_URL`. Zowel `DATABASE_URL` als `DIRECT_URL` gebruiken bij een Supavisor-pooler
     (transaction én session) de gebruikersnaam `postgres.<project-ref>`, niet alleen
     `postgres` — dat laatste geeft een P1000-authenticatiefout.
+14. **CSP met per-request nonce i.p.v. een statische policy.** Next.js' App
+    Router injecteert zelf inline `<script>`-tags voor de RSC-hydratatiepayload.
+    Een statische `script-src 'self'` (zonder `unsafe-inline` of nonce)
+    blokkeert die scripts, waardoor de pagina wél laadt maar nooit hydrateert
+    — geen enkele knop reageert dan. Opgelost met `src/middleware.ts` die per
+    request een nonce genereert en die in de CSP-header zet; de root layout
+    leest `headers()` uit (nodig om Next.js zijn eigen scripts van die nonce
+    te laten voorzien). Kost een kleine prestatie-aftrek (alle pagina's zijn
+    nu dynamisch i.p.v. statisch prerenderd), maar dat weegt niet op tegen
+    een kapotte UI. Lokaal geverifieerd door de gebouwde HTML te inspecteren
+    op nonce-consistentie vóór het pushen.
 
 ---
 

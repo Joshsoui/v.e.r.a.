@@ -2,26 +2,13 @@
 
 const isProd = process.env.NODE_ENV === "production";
 
-// Contentbeveiligingsbeleid. 'unsafe-inline' op style-src is nodig omdat Tailwind
-// en React soms inline style-attributen zetten; script-src blijft strikt op 'self'.
-const csp = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "form-action 'self'",
-  isProd ? "upgrade-insecure-requests" : "",
-]
-  .filter(Boolean)
-  .join("; ");
-
+// Content-Security-Policy wordt NIET hier gezet maar in src/middleware.ts —
+// die genereert een per-request nonce, wat nodig is omdat Next.js' App
+// Router zelf inline <script>-tags injecteert voor RSC-hydratatie. Een
+// statische CSP-header hier zou naast de nonce-CSP uit de middleware
+// worden afgedwongen (de browser combineert meerdere CSP-headers restrictief),
+// wat de nonce zou ondermijnen. Zie de comments in src/middleware.ts.
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: csp },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
