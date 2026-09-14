@@ -35,7 +35,7 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
-      <div className="mb-8 flex justify-center">
+      <div className="animate-fade-in-up mb-8 flex justify-center">
         <Image
           src="/logo.png"
           alt="V.E.R.A. — Verslag- en Rapportage Assistent"
@@ -45,7 +45,7 @@ export default function LoginPage() {
           className="h-14 w-auto"
         />
       </div>
-      <Card>
+      <Card className="animate-fade-in-up [animation-delay:80ms]">
         <h2 className="mb-4 text-lg font-semibold">Inloggen</h2>
         {error && (
           <div className="mb-4">

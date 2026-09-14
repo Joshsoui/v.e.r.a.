@@ -8,32 +8,29 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" | "ghost" }) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium " +
+    "transition-all duration-150 ease-out active:scale-[0.97] " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vera-500 focus-visible:ring-offset-2 " +
+    "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100";
   const variants: Record<string, string> = {
-    primary: "bg-vera-600 text-white hover:bg-vera-700",
-    secondary: "bg-white text-vera-700 border border-vera-300 hover:bg-vera-50",
-    danger: "bg-red-600 text-white hover:bg-red-700",
+    primary: "bg-vera-600 text-white shadow-sm hover:bg-vera-700 hover:shadow-md",
+    secondary: "bg-white text-vera-700 border border-vera-300 hover:border-vera-400 hover:bg-vera-50",
+    danger: "bg-red-600 text-white shadow-sm hover:bg-red-700 hover:shadow-md",
     ghost: "text-vera-700 hover:bg-vera-50",
   };
   return <button className={`${base} ${variants[variant]} ${className}`} {...props} />;
 }
 
+const FIELD_BASE =
+  "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm transition-all duration-150 " +
+  "hover:border-gray-400 focus:border-vera-500 focus:outline-none focus:ring-4 focus:ring-vera-500/15";
+
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={`w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-vera-500 focus:outline-none focus:ring-1 focus:ring-vera-500 ${props.className ?? ""}`}
-    />
-  );
+  return <input {...props} className={`${FIELD_BASE} ${props.className ?? ""}`} />;
 }
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      {...props}
-      className={`w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-vera-500 focus:outline-none focus:ring-1 focus:ring-vera-500 ${props.className ?? ""}`}
-    />
-  );
+  return <textarea {...props} className={`${FIELD_BASE} ${props.className ?? ""}`} />;
 }
 
 export function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
@@ -46,7 +43,9 @@ export function Label({ children, htmlFor }: { children: React.ReactNode; htmlFo
 
 export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
+    <div
+      className={`rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-shadow duration-200 ${className}`}
+    >
       {children}
     </div>
   );
@@ -60,13 +59,16 @@ export function Alert({
   children: React.ReactNode;
 }) {
   const variants: Record<string, string> = {
-    info: "bg-blue-50 text-blue-800 border-blue-200",
-    error: "bg-red-50 text-red-800 border-red-200",
-    success: "bg-green-50 text-green-800 border-green-200",
-    warning: "bg-amber-50 text-amber-800 border-amber-200",
+    info: "bg-blue-50 text-blue-800 border-blue-200 border-l-blue-500",
+    error: "bg-red-50 text-red-800 border-red-200 border-l-red-500",
+    success: "bg-green-50 text-green-800 border-green-200 border-l-green-500",
+    warning: "bg-amber-50 text-amber-800 border-amber-200 border-l-amber-500",
   };
   return (
-    <div className={`rounded-md border px-4 py-3 text-sm ${variants[variant]}`} role="status">
+    <div
+      className={`animate-fade-in-up rounded-lg border border-l-4 px-4 py-3 text-sm ${variants[variant]}`}
+      role="status"
+    >
       {children}
     </div>
   );
@@ -80,13 +82,15 @@ export function Badge({
   variant?: "neutral" | "success" | "warning" | "danger";
 }) {
   const variants: Record<string, string> = {
-    neutral: "bg-gray-100 text-gray-700",
-    success: "bg-green-100 text-green-800",
-    warning: "bg-amber-100 text-amber-800",
-    danger: "bg-red-100 text-red-800",
+    neutral: "bg-gray-100 text-gray-700 ring-gray-500/10",
+    success: "bg-green-100 text-green-800 ring-green-600/10",
+    warning: "bg-amber-100 text-amber-800 ring-amber-600/10",
+    danger: "bg-red-100 text-red-800 ring-red-600/10",
   };
   return (
-    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${variants[variant]}`}>
+    <span
+      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${variants[variant]}`}
+    >
       {children}
     </span>
   );
