@@ -9,6 +9,7 @@ import {
   type ReportDetail,
   type Statement,
   type StatementCategory,
+  type SourceSegment,
 } from "@/components/report/types";
 
 function statusBadgeVariant(status: Chapter["status"]): "success" | "warning" | "neutral" {
@@ -28,11 +29,161 @@ function newStatement(): Statement {
   };
 }
 
+function statementDiffersFromOriginal(s: Statement): boolean {
+  if (!s.original) return false;
+  return (
+    s.text !== s.original.text ||
+    s.category !== s.original.category ||
+    s.sourceRefs.length !== s.original.sourceRefs.length ||
+    s.sourceRefs.some((ref, i) => ref !== s.original!.sourceRefs[i])
+  );
+}
+
+/** Inklapbaar paneel met de volledige brontekst, gegroepeerd per bron. */
+function SourceTextPanel({ segments }: { segments: SourceSegment[] }) {
+  const [open, setOpen] = useState(false);
+  if (segments.length === 0) return null;
+
+  const grouped = new Map<string, SourceSegment[]>();
+  for (const seg of segments) {
+    const list = grouped.get(seg.sourceLabel) ?? [];
+    list.push(seg);
+    grouped.set(seg.sourceLabel, list);
+  }
+
+  return (
+    <Card>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <h3 className="font-semibold text-gray-800">Brontekst bekijken</h3>
+        <span className="text-xs text-vera-600">{open ? "Verbergen ▲" : "Tonen ▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-4 max-h-96 space-y-4 overflow-y-auto border-t border-gray-100 pt-4">
+          {[...grouped.entries()].map(([label, segs]) => (
+            <div key={label}>
+              <h4 className="mb-1 text-xs font-semibold text-gray-600">{label}</h4>
+              <div className="space-y-1">
+                {segs.map((seg) => (
+                  <p key={seg.id} className="text-sm text-gray-700">
+                    <span className="mr-1 font-mono text-xs text-vera-600">[{seg.id}]</span>
+                    {seg.text}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Bewerkbare bronverwijzingen: verwijderbare chips + een selector om een geldig segment toe te voegen. */
+function SourceRefsEditor({
+  sourceRefs,
+  segments,
+  onChange,
+}: {
+  sourceRefs: string[];
+  segments: SourceSegment[];
+  onChange: (next: string[]) => void;
+}) {
+  const [showPreview, setShowPreview] = useState(false);
+  const segmentById = new Map(segments.map((s) => [s.id, s]));
+  const availableToAdd = segments.filter((s) => !sourceRefs.includes(s.id));
+
+  const grouped = new Map<string, SourceSegment[]>();
+  for (const seg of availableToAdd) {
+    const list = grouped.get(seg.sourceLabel) ?? [];
+    list.push(seg);
+    grouped.set(seg.sourceLabel, list);
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {sourceRefs.map((ref) => {
+        const known = segmentById.has(ref);
+        return (
+          <span
+            key={ref}
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
+              known ? "border-gray-300 bg-gray-50 text-gray-700" : "border-red-300 bg-red-50 text-red-700"
+            }`}
+            title={known ? segmentById.get(ref)!.text : "Dit segment bestaat niet (meer) in de brontekst."}
+          >
+            bron: {ref}
+            {!known && " (onbekend)"}
+            <button
+              type="button"
+              onClick={() => onChange(sourceRefs.filter((r) => r !== ref))}
+              className="text-red-600 hover:text-red-800"
+              aria-label={`Bronverwijzing ${ref} verwijderen`}
+            >
+              ×
+            </button>
+          </span>
+        );
+      })}
+
+      {sourceRefs.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowPreview((v) => !v)}
+          className="text-xs text-vera-600 hover:underline"
+        >
+          {showPreview ? "bron verbergen" : "bron bekijken"}
+        </button>
+      )}
+
+      {availableToAdd.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) onChange([...sourceRefs, e.target.value]);
+          }}
+          className="rounded border border-dashed border-gray-300 px-1.5 py-0.5 text-xs text-gray-500"
+        >
+          <option value="">+ bron toevoegen</option>
+          {[...grouped.entries()].map(([label, segs]) => (
+            <optgroup key={label} label={label}>
+              {segs.map((seg) => (
+                <option key={seg.id} value={seg.id}>
+                  {seg.id} — alinea {seg.index}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      )}
+
+      {showPreview && (
+        <div className="mt-1 w-full space-y-1 rounded-md border border-gray-200 bg-gray-50 p-2">
+          {sourceRefs.map((ref) => {
+            const seg = segmentById.get(ref);
+            return (
+              <p key={ref} className="text-xs text-gray-600">
+                <span className="mr-1 font-mono text-vera-600">[{ref}]</span>
+                {seg ? seg.text : "Dit segment bestaat niet (meer) in de brontekst."}
+              </p>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChapterEditor({
   chapter,
+  segments,
   onSave,
 }: {
   chapter: Chapter;
+  segments: SourceSegment[];
   onSave: (chapterId: string, statements: Statement[], missingInfo: string[], markReviewed: boolean) => Promise<void>;
 }) {
   const [open, setOpen] = useState(chapter.status !== "COMPLEET");
@@ -44,6 +195,16 @@ function ChapterEditor({
 
   function updateStatement(id: string, patch: Partial<Statement>) {
     setStatements((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+
+  function resetStatementToOriginal(id: string) {
+    setStatements((prev) =>
+      prev.map((s) =>
+        s.id === id && s.original
+          ? { ...s, text: s.original.text, category: s.original.category, sourceRefs: [...s.original.sourceRefs] }
+          : s,
+      ),
+    );
   }
 
   function removeStatement(id: string) {
@@ -125,11 +286,14 @@ function ChapterEditor({
                   <Badge variant={s.origin === "AI" ? "neutral" : "success"}>
                     {s.origin === "AI" ? "AI-gegenereerd" : "Handmatig"}
                   </Badge>
-                  {s.sourceRefs.length > 0 && (
-                    <Badge variant={s.sourceVerified ? "neutral" : "danger"}>
-                      bron: {s.sourceRefs.join(", ")}
-                      {!s.sourceVerified && " (niet geverifieerd)"}
-                    </Badge>
+                  {statementDiffersFromOriginal(s) && (
+                    <button
+                      type="button"
+                      onClick={() => resetStatementToOriginal(s.id)}
+                      className="text-xs text-vera-600 hover:underline"
+                    >
+                      ↺ Terug naar AI-versie
+                    </button>
                   )}
                   <button
                     type="button"
@@ -144,6 +308,13 @@ function ChapterEditor({
                   value={s.text}
                   onChange={(e) => updateStatement(s.id, { text: e.target.value })}
                 />
+                <div className="mt-2">
+                  <SourceRefsEditor
+                    sourceRefs={s.sourceRefs}
+                    segments={segments}
+                    onChange={(next) => updateStatement(s.id, { sourceRefs: next })}
+                  />
+                </div>
               </div>
             ))}
             <Button variant="secondary" onClick={() => setStatements((prev) => [...prev, newStatement()])}>
@@ -228,8 +399,10 @@ export function StepControle({
         </p>
       </div>
 
+      <SourceTextPanel segments={report.sourceSegments} />
+
       {report.chapters.map((chapter) => (
-        <ChapterEditor key={chapter.id} chapter={chapter} onSave={onSaveChapter} />
+        <ChapterEditor key={chapter.id} chapter={chapter} segments={report.sourceSegments} onSave={onSaveChapter} />
       ))}
 
       {!allReviewed && <Alert variant="warning">Niet alle hoofdstukken zijn al gecontroleerd.</Alert>}

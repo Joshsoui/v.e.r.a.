@@ -84,6 +84,7 @@ export function ReportWizard({ reportId }: { reportId: string }) {
     writingStyleKey?: string | null;
     addChecklist?: boolean;
     addConceptFootnote?: boolean;
+    reference?: string | null;
     advanceTo?: number;
   }) {
     const { advanceTo, ...rest } = patch;
@@ -167,8 +168,12 @@ export function ReportWizard({ reportId }: { reportId: string }) {
       <Link href="/dashboard" className="text-sm text-vera-600 hover:underline">
         ← Terug naar overzicht
       </Link>
-      <h1 className="mb-1 mt-2 text-2xl font-bold text-vera-800">{report.title}</h1>
-      <p className="mb-6 text-sm text-gray-500">{report.formatTemplate.name}</p>
+      <h1 className="mb-1 mt-2 text-2xl font-bold text-vera-800">
+        {report.reference || report.title}
+      </h1>
+      <p className="mb-6 text-sm text-gray-500">
+        {report.reference ? `${report.title} — ${report.formatTemplate.name}` : report.formatTemplate.name}
+      </p>
 
       <StepIndicator activeStep={activeStep} maxReachedStep={report.currentStep} onSelect={setActiveStep} />
 

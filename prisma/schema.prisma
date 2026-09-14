@@ -162,6 +162,13 @@ model Report {
   formatTemplate     FormatTemplate @relation(fields: [formatTemplateId], references: [id])
 
   title              String
+
+  /// Vrije, door de gebruiker gekozen eigen referentie (bv. "zaak Timo B.")
+  /// om rapporten in het dashboard uit elkaar te houden. Bewust NIET de
+  /// permanente `title` (zie bovenstaande opmerking): dit veld hoort bij de
+  /// tijdelijke dossierinhoud en wordt, net als brondocumenten en
+  /// hoofdstukinhoud, geleegd door de retentie-purge (scripts/purge-expired.ts).
+  reference          String?
   writingStyleKey    String?
   status             ReportStatus @default(INSTELLINGEN)
   currentStep        Int          @default(1)

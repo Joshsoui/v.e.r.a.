@@ -58,6 +58,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       // niet AI-gegenereerd en hoeft dus niet tegen brontekst geverifieerd te
       // worden; AI-afkomstige statements blijven wel onderhevig aan de check.
       sourceVerified: s.origin === "USER" ? true : !unverifiedIndexes.has(idx),
+      // De client stuurt `original` (indien aanwezig) ongewijzigd terug; de
+      // server herschrijft dit nooit, zodat "terug naar AI-versie" altijd de
+      // echte oorspronkelijke AI-output blijft tonen.
+      original: s.original ?? null,
     }));
 
     const validatorRules = parseValidatorRules(report.formatTemplate.validatorRules);

@@ -59,6 +59,7 @@ export default async function DashboardPage() {
               key={report.id}
               reportId={report.id}
               title={report.title}
+              reference={report.reference}
               documentTypeName={report.formatTemplate.documentType.name}
               formatName={report.formatTemplate.name}
               statusLabel={STATUS_LABELS[report.status] ?? report.status}

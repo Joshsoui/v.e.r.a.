@@ -116,18 +116,27 @@ tabs binnen één pagina per rapport (`/reports/[id]`), met een voortgangsindica
 al bereikte stappen aanklikbaar maakt:
 
 1. **Instellingen** — vakgebied, documenttype, format (gemeente/variant) en schrijfstijl
-   kiezen (`/reports/new`), plus checklist-/voetnoot-opties. Hier kan een organisatie ook
-   **een eigen .docx-sjabloon uploaden**: de Word-koppen (Kop 1/Kop 2) in dat sjabloon
-   worden automatisch een nieuw, org-eigen format (zie "Sjabloon-upload" in hoofdstuk 3),
-   dat meteen als optie verschijnt bij het gekozen documenttype.
+   kiezen (`/reports/new`), plus checklist-/voetnoot-opties. Zodra een format gekozen is,
+   toont de pagina een preview van de hoofdstukstructuur die dat format oplevert. Hier kan
+   een organisatie ook **een eigen .docx-sjabloon uploaden**: de Word-koppen (Kop 1/Kop 2)
+   in dat sjabloon worden automatisch een nieuw, org-eigen format (zie "Sjabloon-upload" in
+   hoofdstuk 3), dat meteen als optie verschijnt bij het gekozen documenttype. Optioneel kan
+   hier ook een **eigen referentie** worden ingevuld (bv. "zaak Timo B.") — puur om rapporten
+   in het dashboard uit elkaar te houden; dit is, net als de brontekst, tijdelijke inhoud die
+   bij de retentie-purge wordt geleegd (zie hoofdstuk 4), nooit de permanente `title`.
 2. **Broninformatie** — aantekeningen plakken of `.docx`-bestanden uploaden, met validatie
-   op bestandsgrootte, aantal bestanden en totale invoerlengte.
-3. **AI-analyse** — de AI structureert de bronnen tot een conceptverslag volgens het
+   op bestandsgrootte, aantal bestanden en totale invoerlengte, en een live tekenteller
+   tegen `MAX_TOTAL_INPUT_CHARS` terwijl je typt/plakt.
+3. **VERA-analyse** — de AI structureert de bronnen tot een conceptverslag volgens het
    gekozen format (zie hoofdstuk 3).
 4. **Controle en bewerking** — elk hoofdstuk heeft een status
    (compleet/onvolledig/nog niet gecontroleerd); deterministische validators tonen
    aandachtspunten; de gebruiker kan tekst bewerken, beweringen toevoegen/verwijderen en
-   ontbrekende-informatiepunten beheren.
+   ontbrekende-informatiepunten beheren. Een inklapbaar paneel toont de volledige brontekst
+   (per segment-id) zonder dat je terug hoeft naar stap 2. Bronverwijzingen per bewering zijn
+   rechtstreeks bewerkbaar (chips + een selector met alleen geldige segment-id's); een
+   ongeldige verwijzing wordt direct zichtbaar gemarkeerd. Een bewerkte AI-bewering kan met
+   één klik worden teruggezet naar de oorspronkelijke AI-tekst ("↺ Terug naar AI-versie").
 5. **Export** — Word-document met titelpagina, versienummer, optionele checklist en
    optionele voetnoot "Concept – menselijke controle vereist".
 
@@ -188,6 +197,13 @@ Dit is het meest kritieke onderdeel van V.E.R.A. en op meerdere niveaus afgedwon
 - **Rapporttitels bevatten nooit cliëntgegevens.** Titels worden automatisch gegenereerd
   uit documenttype + datum (`generateReportTitle()`), nooit uit vrije, door de gebruiker
   getypte tekst. Zo is ook de permanente metadata nooit herleidbaar tot een individu.
+- **Eigen referentie (`Report.reference`) is expliciet tijdelijke inhoud, geen metadata.**
+  Dit optionele, vrij in te vullen veld (bv. "zaak Timo B.") bestaat puur om rapporten in
+  het dashboard uit elkaar te houden — in tegenstelling tot de titel is het wél vrije,
+  door de gebruiker getypte tekst, en kan dus in theorie herleidbare informatie bevatten.
+  Daarom wordt het, net als brondocumenten en hoofdstukinhoud, door de retentie-purge
+  geleegd (op `null` gezet) zodra een rapport verloopt — het blijft nooit als metadata
+  achter.
 - **Bewust geen losse gevoelige velden.** Er zijn geen database-kolommen voor BSN,
   geboortedatum, volledig adres, etc. Dergelijke gegevens kunnen alleen voorkomen binnen
   de vrije brontekst — en die brontekst is onderdeel van de tijdelijke, verwijderbare
@@ -510,13 +526,16 @@ van een softwareoplevering vallen:
 
 ### Wat werkt
 
-- Volledige 5-stappen-workflow: instellingen → bronnen → AI-analyse → controle/bewerking →
-  Word-export.
+- Volledige 5-stappen-workflow: instellingen → bronnen → VERA-analyse → controle/bewerking →
+  Word-export. Inclusief een hoofdstukstructuur-preview bij formatkeuze, een live
+  tekenteller tegen de invoerlimiet, een inklapbare brontekst-weergave en bewerkbare
+  bronverwijzingen met "terug naar AI-versie" tijdens de controle-stap, en een optioneel
+  eigen-referentieveld om rapporten in het dashboard uit elkaar te houden.
 - 5 geseede vakgebieden (Jeugd, Wmo, Participatie, Schuldhulpverlening, Leerplicht), elk met
   een eigen standaardformat, plus sjabloon-upload waarmee een organisatie een eigen
   .docx-sjabloon kan uploaden dat automatisch een nieuw, org-eigen format wordt.
 - Registratie/login/logout, CSRF-bescherming, IDOR-veilige organisatie-isolatie,
-  zelfbedieningsverwijdering van eigen data.
+  zelfbedieningsverwijdering van eigen data (ook per los rapport, vanuit het dashboard).
 - Zero-fabrication AI-integratie met structureel (schema-niveau) afgedwongen
   brontraceerbaarheid, plus deterministische fallback-controle.
 - Deterministische hoofdstukvalidatie, configureerbaar per format.

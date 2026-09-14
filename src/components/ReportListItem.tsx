@@ -9,6 +9,7 @@ import { Button, Card, Badge } from "@/components/ui/primitives";
 export function ReportListItem({
   reportId,
   title,
+  reference,
   documentTypeName,
   formatName,
   statusLabel,
@@ -16,6 +17,7 @@ export function ReportListItem({
 }: {
   reportId: string;
   title: string;
+  reference: string | null;
   documentTypeName: string;
   formatName: string;
   statusLabel: string;
@@ -42,8 +44,9 @@ export function ReportListItem({
     <Card className="transition hover:border-vera-300 hover:shadow-md">
       <div className="flex items-center justify-between gap-4">
         <Link href={`/reports/${reportId}`} className="block min-w-0 flex-1">
-          <div className="truncate font-medium text-gray-800">{title}</div>
-          <div className="text-xs text-gray-500">
+          <div className="truncate font-medium text-gray-800">{reference || title}</div>
+          <div className="truncate text-xs text-gray-500">
+            {reference && <span className="mr-1">{title} —</span>}
             {documentTypeName} — {formatName}
           </div>
         </Link>

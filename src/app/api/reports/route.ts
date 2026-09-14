@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
       reports: reports.map((r) => ({
         id: r.id,
         title: r.title,
+        reference: r.reference,
         status: r.status,
         currentStep: r.currentStep,
         documentTypeName: r.formatTemplate.documentType.name,
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
         formatTemplateId: formatTemplate.id,
         writingStyleKey: parsed.data.writingStyleKey ?? null,
         title: generateReportTitle(formatTemplate.documentType.name, now),
+        reference: parsed.data.reference || null,
         status: "INSTELLINGEN",
         currentStep: 1,
         addChecklist: parsed.data.addChecklist ?? true,

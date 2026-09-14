@@ -85,6 +85,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             sourceRefs: s.sourceRefs,
             origin: "AI",
             sourceVerified: !unverifiedIndexes.has(idx),
+            original: { text: s.text, category: s.category, sourceRefs: s.sourceRefs },
           }),
         );
 

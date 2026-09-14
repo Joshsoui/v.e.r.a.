@@ -6,6 +6,12 @@ import { statementCategorySchema } from "@/lib/ai/schema";
 // AI-structured-output-schema) om AI-afkomstige van door de gebruiker
 // toegevoegde/bewerkte inhoud te onderscheiden en om te laten zien of een
 // bronverwijzing daadwerkelijk bestaat.
+const originalStatementSchema = z.object({
+  text: z.string(),
+  category: statementCategorySchema,
+  sourceRefs: z.array(z.string()),
+});
+
 export const persistedStatementSchema = z.object({
   id: z.string().min(1),
   text: z.string().min(1).max(4000),
@@ -13,6 +19,9 @@ export const persistedStatementSchema = z.object({
   sourceRefs: z.array(z.string()).default([]),
   origin: z.enum(["AI", "USER"]),
   sourceVerified: z.boolean(),
+  // Oorspronkelijke AI-output, zie updateChapterStatementSchema in
+  // src/lib/validation/reports.ts voor de volledige toelichting.
+  original: originalStatementSchema.nullable().optional(),
 });
 export type PersistedStatement = z.infer<typeof persistedStatementSchema>;
 

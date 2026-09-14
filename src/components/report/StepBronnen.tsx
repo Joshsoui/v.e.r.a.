@@ -24,6 +24,8 @@ export function StepBronnen({
   const [error, setError] = useState<string | null>(null);
 
   const totalChars = report.sources.reduce((sum, s) => sum + s.charCount, 0);
+  const projectedChars = totalChars + pastedText.length;
+  const overLimit = projectedChars > report.maxTotalInputChars;
 
   async function handleFileChange() {
     const files = fileInputRef.current?.files;
@@ -108,7 +110,16 @@ export function StepBronnen({
           value={pastedText}
           onChange={(e) => setPastedText(e.target.value)}
         />
-        <Button variant="secondary" disabled={busy || pastedText.trim().length === 0} onClick={handlePasteSubmit}>
+        <p className={`text-xs ${overLimit ? "font-medium text-red-600" : "text-gray-500"}`}>
+          {projectedChars.toLocaleString("nl-NL")} / {report.maxTotalInputChars.toLocaleString("nl-NL")}{" "}
+          tekens totaal (incl. reeds toegevoegde bronnen)
+          {overLimit && " — dit overschrijdt de limiet, verwijder eerst tekst"}
+        </p>
+        <Button
+          variant="secondary"
+          disabled={busy || pastedText.trim().length === 0 || overLimit}
+          onClick={handlePasteSubmit}
+        >
           Tekst toevoegen
         </Button>
       </div>

@@ -6,8 +6,10 @@ import { updateReportSettingsSchema } from "@/lib/validation/reports";
 import { parseChapters, parseWritingStyles, parseValidatorRules } from "@/lib/formats/types";
 import { computeChapterIssues } from "@/lib/reports/service";
 import { persistedStatementsArraySchema, missingInfoArraySchema } from "@/lib/reports/types";
+import { segmentSources } from "@/lib/ai/sourceSegments";
 import { writeAuditLog, hashIp, getClientIp } from "@/lib/security/audit";
 import { ApiError, handleApiError } from "@/lib/utils/errors";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +21,15 @@ export async function GET(req: NextRequest, { params }: Params) {
     const { id } = await params;
     const report = await getReportOrThrow(id, session);
     const validatorRules = parseValidatorRules(report.formatTemplate.validatorRules);
+    const sourceSegments = segmentSources(
+      report.sources.map((s) => ({ id: s.id, filename: s.filename, extractedText: s.extractedText })),
+    );
 
     return NextResponse.json({
       report: {
         id: report.id,
         title: report.title,
+        reference: report.reference,
         status: report.status,
         currentStep: report.currentStep,
         version: report.version,
@@ -32,6 +38,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         addConceptFootnote: report.addConceptFootnote,
         expiresAt: report.expiresAt,
         contentDeletedAt: report.contentDeletedAt,
+        maxTotalInputChars: env.maxTotalInputChars,
         formatTemplate: {
           id: report.formatTemplate.id,
           name: report.formatTemplate.name,
@@ -44,6 +51,12 @@ export async function GET(req: NextRequest, { params }: Params) {
           sourceType: s.sourceType,
           charCount: s.charCount,
           createdAt: s.createdAt,
+        })),
+        sourceSegments: sourceSegments.map((seg) => ({
+          id: seg.id,
+          sourceLabel: seg.sourceLabel,
+          index: seg.index,
+          text: seg.text,
         })),
         chapters: report.chapters.map((c) => {
           const statements = persistedStatementsArraySchema.parse(c.statements);
@@ -93,6 +106,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (parsed.data.addConceptFootnote !== undefined)
       data.addConceptFootnote = parsed.data.addConceptFootnote;
     if (parsed.data.currentStep !== undefined) data.currentStep = parsed.data.currentStep;
+    if (parsed.data.reference !== undefined) data.reference = parsed.data.reference || null;
 
     const updated = await prisma.report.update({
       where: { id: existing.id },

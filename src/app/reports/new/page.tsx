@@ -7,12 +7,14 @@ import { apiJson } from "@/lib/client/apiFetch";
 import { Button, Card, Label, Alert } from "@/components/ui/primitives";
 
 type WritingStyle = { key: string; label: string; description: string };
+type ChapterDefinition = { key: string; title: string; order: number };
 type FormatTemplate = {
   id: string;
   name: string;
   municipality: string | null;
   isDefault: boolean;
   writingStyles: WritingStyle[];
+  chapters: ChapterDefinition[];
 };
 type DocumentType = { id: string; code: string; name: string; formatTemplates: FormatTemplate[] };
 type Discipline = { id: string; code: string; name: string; documentTypes: DocumentType[] };
@@ -30,6 +32,7 @@ export default function NewReportPage() {
   const [writingStyleKey, setWritingStyleKey] = useState<string>("");
   const [addChecklist, setAddChecklist] = useState(true);
   const [addConceptFootnote, setAddConceptFootnote] = useState(true);
+  const [reference, setReference] = useState("");
 
   const [templateName, setTemplateName] = useState("");
   const [templateUploading, setTemplateUploading] = useState(false);
@@ -107,6 +110,7 @@ export default function NewReportPage() {
           writingStyleKey: writingStyleKey || null,
           addChecklist,
           addConceptFootnote,
+          reference: reference.trim() || null,
         }),
       });
       router.push(`/reports/${report.id}`);
@@ -237,6 +241,20 @@ export default function NewReportPage() {
                 </option>
               ))}
             </select>
+            {formatTemplate && formatTemplate.chapters.length > 0 && (
+              <div className="mt-2 rounded-md bg-gray-50 px-3 py-2">
+                <p className="mb-1 text-xs font-medium text-gray-600">
+                  Dit format levert de volgende hoofdstukken op:
+                </p>
+                <ol className="list-inside list-decimal space-y-0.5 text-xs text-gray-600">
+                  {[...formatTemplate.chapters]
+                    .sort((a, b) => a.order - b.order)
+                    .map((c) => (
+                      <li key={c.key}>{c.title}</li>
+                    ))}
+                </ol>
+              </div>
+            )}
           </div>
 
           <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4">
@@ -273,6 +291,23 @@ export default function NewReportPage() {
                 {templateUploading ? "Bezig met verwerken..." : "Format aanmaken van sjabloon"}
               </Button>
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="reference">Eigen referentie (optioneel)</Label>
+            <input
+              id="reference"
+              type="text"
+              maxLength={200}
+              placeholder="Bijv. 'zaak Timo B.' — alleen zichtbaar voor jou en je collega's"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Helpt om rapporten in het overzicht uit elkaar te houden. Kan later ook nog worden
+              ingesteld of aangepast bij Instellingen.
+            </p>
           </div>
 
           {writingStyles.length > 0 && (

@@ -13,12 +13,14 @@ export function StepInstellingen({
     writingStyleKey?: string | null;
     addChecklist?: boolean;
     addConceptFootnote?: boolean;
+    reference?: string | null;
     advanceTo?: number;
   }) => Promise<void>;
 }) {
   const [writingStyleKey, setWritingStyleKey] = useState(report.writingStyleKey ?? "");
   const [addChecklist, setAddChecklist] = useState(report.addChecklist);
   const [addConceptFootnote, setAddConceptFootnote] = useState(report.addConceptFootnote);
+  const [reference, setReference] = useState(report.reference ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +32,7 @@ export function StepInstellingen({
         writingStyleKey: writingStyleKey || null,
         addChecklist,
         addConceptFootnote,
+        reference: reference.trim() || null,
         advanceTo: advance ? Math.max(report.currentStep, 2) : undefined,
       });
     } catch (err) {
@@ -49,6 +52,23 @@ export function StepInstellingen({
       </div>
 
       {error && <Alert variant="error">{error}</Alert>}
+
+      <div>
+        <Label htmlFor="reference">Eigen referentie (optioneel)</Label>
+        <input
+          id="reference"
+          type="text"
+          maxLength={200}
+          placeholder="Bijv. 'zaak Timo B.' — alleen zichtbaar voor jou en je collega's"
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          Helpt om rapporten in het overzicht uit elkaar te houden. Net als de brontekst is dit
+          tijdelijke inhoud: verdwijnt automatisch zodra de bewaartermijn van dit rapport verloopt.
+        </p>
+      </div>
 
       {report.formatTemplate.writingStyles.length > 0 && (
         <div>

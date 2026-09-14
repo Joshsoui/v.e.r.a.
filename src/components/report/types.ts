@@ -19,6 +19,19 @@ export type SourceDoc = {
   createdAt: string;
 };
 
+export type SourceSegment = {
+  id: string;
+  sourceLabel: string;
+  index: number;
+  text: string;
+};
+
+export type OriginalStatement = {
+  text: string;
+  category: StatementCategory;
+  sourceRefs: string[];
+};
+
 export type Statement = {
   id: string;
   text: string;
@@ -26,6 +39,7 @@ export type Statement = {
   sourceRefs: string[];
   origin: "AI" | "USER";
   sourceVerified: boolean;
+  original?: OriginalStatement | null;
 };
 
 export type Chapter = {
@@ -43,6 +57,7 @@ export type Chapter = {
 export type ReportDetail = {
   id: string;
   title: string;
+  reference: string | null;
   status: string;
   currentStep: number;
   version: number;
@@ -51,6 +66,7 @@ export type ReportDetail = {
   addConceptFootnote: boolean;
   expiresAt: string;
   contentDeletedAt: string | null;
+  maxTotalInputChars: number;
   formatTemplate: {
     id: string;
     name: string;
@@ -58,6 +74,7 @@ export type ReportDetail = {
     writingStyles: WritingStyle[];
   };
   sources: SourceDoc[];
+  sourceSegments: SourceSegment[];
   chapters: Chapter[];
 };
 
