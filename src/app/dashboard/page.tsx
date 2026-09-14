@@ -39,7 +39,7 @@ export default async function DashboardPage() {
           width={900}
           height={303}
           priority
-          className="h-10 w-auto"
+          className="h-10 w-auto self-start"
         />
         <AccountMenu userName={user.name} organizationName={user.organization.name} />
       </div>
