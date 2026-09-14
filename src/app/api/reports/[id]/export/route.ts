@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireSession } from "@/lib/auth/guard";
 import { getReportOrThrow } from "@/lib/reports/access";
 import { generateReportDocx } from "@/lib/docx/export";
+import { fillDocxTemplate, TemplateFillError } from "@/lib/docx/fillTemplate";
 import { persistedStatementsArraySchema, missingInfoArraySchema } from "@/lib/reports/types";
 import { sanitizeFilename } from "@/lib/utils/filename";
 import { writeAuditLog, hashIp, getClientIp } from "@/lib/security/audit";
@@ -29,27 +30,65 @@ export async function POST(req: NextRequest, { params }: Params) {
       throw new ApiError(404, "Niet gevonden.");
     }
 
-    const updated = await prisma.report.update({
-      where: { id: report.id },
-      data: { version: { increment: 1 }, status: "GEEXPORTEERD" },
+    const nextVersion = report.version + 1;
+    const exportChapters = report.chapters.map((c) => ({
+      title: c.title,
+      statements: persistedStatementsArraySchema.parse(c.statements),
+      missingInfo: missingInfoArraySchema.parse(c.missingInfo),
+      status: c.status,
+    }));
+    const generatedAt = new Date();
+
+    // Een uit een geüpload .docx-sjabloon aangemaakt format heeft zijn eigen
+    // bestand (met logo/huisstijl/opmaak) bewaard — die wordt dan gevuld en
+    // hergebruikt, zodat het export-bestand er als het echte gemeentelijke
+    // document uitziet. Gedeelde/geseede formats hebben geen eigen sjabloon
+    // en vallen terug op het generieke, netjes opgemaakte document.
+    const templateRow = await prisma.formatTemplate.findUnique({
+      where: { id: report.formatTemplateId },
+      select: { sourceDocx: true },
     });
 
-    const buffer = await generateReportDocx({
-      documentTypeName: report.formatTemplate.documentType.name,
-      formatName: report.formatTemplate.name,
-      organizationName: organization.name,
-      municipality: organization.municipality,
-      title: report.title,
-      version: updated.version,
-      addChecklist: report.addChecklist,
-      addConceptFootnote: report.addConceptFootnote,
-      generatedAt: new Date(),
-      chapters: report.chapters.map((c) => ({
-        title: c.title,
-        statements: persistedStatementsArraySchema.parse(c.statements),
-        missingInfo: missingInfoArraySchema.parse(c.missingInfo),
-        status: c.status,
-      })),
+    let buffer: Buffer;
+    if (templateRow?.sourceDocx) {
+      try {
+        buffer = await fillDocxTemplate(Buffer.from(templateRow.sourceDocx), {
+          chapters: exportChapters,
+          version: nextVersion,
+          generatedAt,
+          addChecklist: report.addChecklist,
+          addConceptFootnote: report.addConceptFootnote,
+        });
+      } catch (err) {
+        if (err instanceof TemplateFillError) {
+          throw new ApiError(
+            502,
+            `Het geüploade sjabloon van dit format kon niet automatisch worden ingevuld: ${err.message}`,
+          );
+        }
+        throw err;
+      }
+    } else {
+      buffer = await generateReportDocx({
+        documentTypeName: report.formatTemplate.documentType.name,
+        formatName: report.formatTemplate.name,
+        organizationName: organization.name,
+        municipality: organization.municipality,
+        title: report.title,
+        version: nextVersion,
+        addChecklist: report.addChecklist,
+        addConceptFootnote: report.addConceptFootnote,
+        generatedAt,
+        chapters: exportChapters,
+      });
+    }
+
+    // Pas nu, ná succesvolle documentgeneratie, de versie/status bijwerken —
+    // zo blijft een mislukte export (bv. een sjabloon dat niet meer bij het
+    // format past) zonder neveneffect op het rapport.
+    await prisma.report.update({
+      where: { id: report.id },
+      data: { version: nextVersion, status: "GEEXPORTEERD" },
     });
 
     await writeAuditLog({

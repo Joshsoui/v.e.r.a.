@@ -13,7 +13,13 @@ export async function getReportOrThrow(reportId: string, session: SessionPayload
   const report = await prisma.report.findFirst({
     where: { id: reportId, organizationId: session.organizationId },
     include: {
-      formatTemplate: { include: { documentType: { include: { discipline: true } } } },
+      formatTemplate: {
+        include: { documentType: { include: { discipline: true } } },
+        // sourceDocx (het originele sjabloon, mogelijk honderden KB's) is
+        // hier niet nodig — alleen de exportroute leest dit apart en
+        // gericht op formatTemplateId, zie src/app/api/reports/[id]/export/route.ts.
+        omit: { sourceDocx: true },
+      },
       sources: { orderBy: { createdAt: "asc" } },
       chapters: { orderBy: { order: "asc" } },
     },

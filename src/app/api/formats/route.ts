@@ -28,6 +28,10 @@ export async function GET() {
                 OR: [{ organizationId: null }, { organizationId: session.organizationId }],
               },
               orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+              // sourceDocx kan enkele honderden KB's binaire data zijn en is
+              // hier niet nodig (alleen relevant bij export) — nooit
+              // meesturen in deze lijst-respons.
+              omit: { sourceDocx: true },
             },
           },
         },

@@ -65,6 +65,10 @@ export async function POST(req: NextRequest) {
         chapters,
         writingStyles: defaultWritingStyles,
         validatorRules: buildGenericValidatorRules(chapterKeys),
+        // Het originele sjabloon zelf bewaren (logo/huisstijl/opmaak) zodat de
+        // export dit document kan hergebruiken in plaats van een generiek
+        // document te genereren — zie src/lib/docx/fillTemplate.ts.
+        sourceDocx: buffer,
       },
     });
 

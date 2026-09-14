@@ -142,6 +142,16 @@ model FormatTemplate {
   /// Record<chapterKey, ValidatorRuleSet> — zie src/lib/validators
   validatorRules Json
 
+  /// Ruwe bytes van het oorspronkelijk geüploade .docx-sjabloon (alleen
+  /// gezet bij formats die via sjabloon-upload zijn aangemaakt; null voor
+  /// gedeelde/geseede formats). Dit is organisatie-CONFIGURATIE, geen
+  /// dossierinhoud — blijft dus permanent bewaard en valt NIET onder de
+  /// retentie-purge (scripts/purge-expired.ts, die alleen per-rapport
+  /// dossierinhoud verwijdert). Wordt gebruikt om de export het originele
+  /// sjabloon (met logo/huisstijl/opmaak) te laten hergebruiken in plaats
+  /// van een generiek document te genereren — zie src/lib/docx/fillTemplate.ts.
+  sourceDocx Bytes?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

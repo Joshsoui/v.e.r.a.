@@ -75,6 +75,24 @@ bewering per hoofdstuk) omdat we voor een willekeurig sjabloon geen domeinkennis
 Het geüploade sjabloon wordt zo letterlijk de structuur waarin de AI de aantekeningen
 opmaakt, met dezelfde zero-fabrication-waarborgen als elk ander format (hoofdstuk 3).
 
+**Het geüploade sjabloon-bestand zelf wordt ook bewaard** (`FormatTemplate.sourceDocx`,
+permanente organisatieconfiguratie — geen dossierinhoud, dus niet onderworpen aan de
+retentie-purge) en bij export **hergebruikt in plaats van een generiek document te
+genereren**: `src/lib/docx/fillTemplate.ts` opent het originele .docx-bestand (een .docx is
+een zip met XML), vindt per hoofdstuk de bijbehorende kopparagraaf in `word/document.xml`
+door de titel te matchen tegen paragrafen met een echte Kop 1/2/3-stijl, en vervangt alleen
+de inhoud tussen die kop en de eerstvolgende kop door de gegenereerde hoofdstuktekst.
+Alle andere onderdelen van het bestand — logo's/afbeeldingen, briefhoofd, lettertypen,
+paginamarges, kop-/voettekst — blijven volledig ongewijzigd, want die staan in andere delen
+van het zip-archief (`word/styles.xml`, `word/header*.xml`, `word/media/*`, …) die nooit
+worden aangeraakt. Het exportbestand ziet er zo daadwerkelijk uit als het officiële
+gemeentelijke document, niet als een generiek V.E.R.A.-document. Een hoofdstuk waarvan de
+titel niet als kop teruggevonden wordt (bv. omdat het sjabloon na het aanmaken van het
+format gewijzigd is) wordt niet stilzwijgend weggelaten, maar met een eigen kop achteraan
+toegevoegd. Gedeelde/geseede formats hebben geen eigen sjabloon-bestand (`sourceDocx` is
+dan `null`) en gebruiken bij export nog steeds de generieke generator
+(`src/lib/docx/export.ts`) — geen regressie voor die formats.
+
 ### AIProvider-abstractie
 
 Alle AI-aanroepen lopen via de interface `AIProvider` (`src/lib/ai/provider.ts`). De enige
@@ -95,7 +113,7 @@ src/lib/validators/          Deterministische (niet-AI) volledigheidsvalidatie
 src/lib/auth/                Wachtwoorden, sessie-JWT, CSRF, guard-helpers
 src/lib/security/            Rate limiting, audit-logging
 src/lib/upload/               Uploadvalidatie + .docx-tekstextractie
-src/lib/docx/                 Word-exportgenerator
+src/lib/docx/                 Word-export: generieke generator (export.ts) + sjabloon-fill (fillTemplate.ts)
 src/lib/reports/              Rapport-toegang (IDOR-veilig), titel-/retentielogica
 src/app/api/                  Alle Route Handlers (REST-achtige JSON-API)
 src/app/(pages)               Auth-pagina's, dashboard, rapport-wizard (5 stappen)
@@ -348,6 +366,17 @@ opgegeven spec. Onderstaande keuzes/aannames zijn daarbij gemaakt:
     is dat domeinspecifiek uitgeschreven, voor een willekeurig geüpload sjabloon kan dat niet.
     Sub-kopjes (een dieper kopniveau dan het hoogste in het document) worden genegeerd,
     niet als apart hoofdstuk behandeld.
+16. **Sjabloon-fill bij export matcht op kop-tekst, geen placeholder-syntax.** In plaats van
+    een echte "mail merge" met placeholders (bv. `{{aanleiding}}`) in het sjabloon, matcht
+    `fillDocxTemplate` een hoofdstuk aan een kop puur op exact overeenkomende tekst (na
+    trimmen/lowercasen) met een paragraaf die een Kop 1/2/3-stijl heeft. Wordt de koptekst in
+    het sjabloon ná het aanmaken van het format gewijzigd, dan wordt dat hoofdstuk niet meer
+    herkend en in plaats daarvan met een eigen (gesynthetiseerde) kop achteraan toegevoegd —
+    nooit stilzwijgend weggelaten. Opsommingen (ontbrekende-informatiepunten) worden als
+    platte tekst met een bullet-teken weergegeven, niet als een "echte" Word-lijst — we raken
+    bewust `word/numbering.xml` niet aan, omdat we niet weten welke lijst-id's een willekeurig
+    sjabloon al gebruikt. Alleen paragraaf-niveau inhoud onder een kop wordt vervangen; tabellen
+    worden niet herkend als hoofdstukgrens (zeer ongebruikelijk in praktijk-sjablonen).
 
 ---
 
@@ -533,13 +562,16 @@ van een softwareoplevering vallen:
   eigen-referentieveld om rapporten in het dashboard uit elkaar te houden.
 - 5 geseede vakgebieden (Jeugd, Wmo, Participatie, Schuldhulpverlening, Leerplicht), elk met
   een eigen standaardformat, plus sjabloon-upload waarmee een organisatie een eigen
-  .docx-sjabloon kan uploaden dat automatisch een nieuw, org-eigen format wordt.
+  .docx-sjabloon kan uploaden dat automatisch een nieuw, org-eigen format wordt — en bij
+  export ook daadwerkelijk hergebruikt wordt (logo/huisstijl/opmaak blijven behouden, alleen
+  de hoofdstukinhoud wordt gevuld), in plaats van een generiek document te genereren.
 - Registratie/login/logout, CSRF-bescherming, IDOR-veilige organisatie-isolatie,
   zelfbedieningsverwijdering van eigen data (ook per los rapport, vanuit het dashboard).
 - Zero-fabrication AI-integratie met structureel (schema-niveau) afgedwongen
   brontraceerbaarheid, plus deterministische fallback-controle.
 - Deterministische hoofdstukvalidatie, configureerbaar per format.
-- Word-export met titelpagina, versienummer, optionele checklist en conceptvoetnoot.
+- Word-export met titelpagina, versienummer, optionele checklist en conceptvoetnoot (voor
+  gedeelde/geseede formats zonder eigen sjabloon).
 - Retentie-purge-script voor privacy-by-design.
 - 65 automatische tests, allemaal groen; losse eval-harness voor promptkwaliteit; 20
   fictieve testcasussen.

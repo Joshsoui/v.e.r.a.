@@ -24,7 +24,7 @@ export default async function DashboardPage() {
     prisma.report.findMany({
       where: { organizationId: session.organizationId },
       orderBy: { updatedAt: "desc" },
-      include: { formatTemplate: { include: { documentType: true } } },
+      include: { formatTemplate: { include: { documentType: true }, omit: { sourceDocx: true } } },
     }),
   ]);
 

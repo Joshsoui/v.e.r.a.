@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const reports = await prisma.report.findMany({
       where: { organizationId: session.organizationId },
       orderBy: { updatedAt: "desc" },
-      include: { formatTemplate: { include: { documentType: true } } },
+      include: { formatTemplate: { include: { documentType: true }, omit: { sourceDocx: true } } },
     });
     return NextResponse.json({
       reports: reports.map((r) => ({
