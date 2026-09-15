@@ -1,0 +1,8 @@
+# V.E.R.A. — security.txt (RFC 9116)
+# Sjabloon: vul de contactgegevens in vóór productiegebruik.
+# Zie https://securitytxt.org/ voor het formaat.
+
+Contact: mailto:[security-contact@invullen.nl]
+Expires: [YYYY-MM-DDT00:00:00.000Z]
+Preferred-Languages: nl, en
+Canonical: https://[jouw-domein]/.well-known/security.txt
