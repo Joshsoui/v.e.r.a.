@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { Document, Packer, Paragraph, HeadingLevel } from "docx";
+import { Document, Packer, Paragraph, HeadingLevel, TextRun } from "docx";
 import {
   extractHeadingsFromDocx,
+  extractHeadingsFromDocxWithFallback,
   headingsToChapterDefinitions,
 } from "@/lib/formats/templateExtraction";
 
@@ -38,6 +39,53 @@ describe("extractHeadingsFromDocx", () => {
     });
     const buffer = await Packer.toBuffer(doc);
     const headings = await extractHeadingsFromDocx(buffer);
+    expect(headings).toHaveLength(0);
+  });
+});
+
+async function buildBoldOnlyTestDocx(): Promise<Buffer> {
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({ children: [new TextRun({ text: "Aanleiding", bold: true })] }),
+          new Paragraph({ text: "Wat losse tekst onder het eerste kopje." }),
+          new Paragraph({ children: [new TextRun({ text: "Onderzoek", bold: true })] }),
+          new Paragraph({ text: "Nog een stukje tekst." }),
+          new Paragraph({ children: [new TextRun({ text: "Conclusie", bold: true })] }),
+        ],
+      },
+    ],
+  });
+  return Packer.toBuffer(doc);
+}
+
+describe("extractHeadingsFromDocxWithFallback", () => {
+  it("gebruikt echte kopstijlen als die er zijn en meldt geen fallback", async () => {
+    const buffer = await buildTestDocx();
+    const { headings, usedFallback } = await extractHeadingsFromDocxWithFallback(buffer);
+    expect(usedFallback).toBe(false);
+    expect(headings.filter((h) => h.level === 1).map((h) => h.title)).toEqual([
+      "Aanleiding",
+      "Onderzoek",
+      "Conclusie",
+    ]);
+  });
+
+  it("valt terug op volledig vetgedrukte titelregels als het sjabloon geen kopstijlen heeft", async () => {
+    const buffer = await buildBoldOnlyTestDocx();
+    const { headings, usedFallback } = await extractHeadingsFromDocxWithFallback(buffer);
+    expect(usedFallback).toBe(true);
+    expect(headings.map((h) => h.title)).toEqual(["Aanleiding", "Onderzoek", "Conclusie"]);
+  });
+
+  it("geeft een lege lijst zonder fallback als er ook geen bruikbare vetgedrukte titels zijn", async () => {
+    const doc = new Document({
+      sections: [{ children: [new Paragraph({ text: "Alleen platte tekst, niet vet, geen koppen." })] }],
+    });
+    const buffer = await Packer.toBuffer(doc);
+    const { headings, usedFallback } = await extractHeadingsFromDocxWithFallback(buffer);
+    expect(usedFallback).toBe(false);
     expect(headings).toHaveLength(0);
   });
 });

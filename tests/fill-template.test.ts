@@ -192,3 +192,104 @@ describe("fillDocxTemplate", () => {
     ).rejects.toBeInstanceOf(TemplateFillError);
   });
 });
+
+// Sjablonen die géén echte Word-kopstijlen gebruiken, maar wel handmatig
+// vetgedrukte titelregels — zie src/lib/docx/headingHeuristics.ts. Moet
+// hetzelfde criterium hanteren als templateExtraction.ts, anders zou een bij
+// upload herkend hoofdstuk hier niet meer terug te vinden zijn.
+async function buildBoldOnlyTemplate(): Promise<Buffer> {
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            children: [new ImageRun({ type: "png", data: LOGO_PNG, transformation: { width: 40, height: 40 } })],
+          }),
+          new Paragraph({ children: [new TextRun("Gemeente Teststad — briefhoofdtekst")] }),
+          new Paragraph({ children: [new TextRun({ text: "Aanleiding en vraagstelling", bold: true })] }),
+          new Paragraph({ text: "TODO: vul hier de aanleiding in." }),
+          new Paragraph({ children: [new TextRun({ text: "Conclusie en vervolgadvies", bold: true })] }),
+          new Paragraph({ text: "TODO: vul hier de conclusie in." }),
+        ],
+      },
+    ],
+  });
+  return Packer.toBuffer(doc);
+}
+
+describe("fillDocxTemplate — vetgedrukte-titel-fallback (sjabloon zonder kopstijlen)", () => {
+  it("matcht en vult hoofdstukken op basis van volledig vetgedrukte titelregels", async () => {
+    const template = await buildBoldOnlyTemplate();
+    const buffer = await fillDocxTemplate(template, {
+      chapters: [
+        chapter("Aanleiding en vraagstelling", "De school heeft een zorgmelding gedaan."),
+        chapter("Conclusie en vervolgadvies", "Vervolgonderzoek wordt geadviseerd."),
+      ],
+      version: 1,
+      generatedAt: new Date(),
+      addChecklist: false,
+      addConceptFootnote: false,
+    });
+
+    const text = await extractPlainText(buffer);
+    expect(text).toContain("Gemeente Teststad — briefhoofdtekst");
+    expect(text).toContain("De school heeft een zorgmelding gedaan.");
+    expect(text).toContain("Vervolgonderzoek wordt geadviseerd.");
+    expect(text).not.toContain("TODO: vul hier");
+  });
+
+  it("behoudt het logo ook bij de vetgedrukte-titel-fallback", async () => {
+    const template = await buildBoldOnlyTemplate();
+    const buffer = await fillDocxTemplate(template, {
+      chapters: [chapter("Aanleiding en vraagstelling"), chapter("Conclusie en vervolgadvies")],
+      version: 1,
+      generatedAt: new Date(),
+      addChecklist: false,
+      addConceptFootnote: false,
+    });
+
+    const zip = await JSZip.loadAsync(buffer);
+    const mediaFiles = Object.values(zip.files).filter((f) => !f.dir && f.name.startsWith("word/media/"));
+    expect(mediaFiles.length).toBeGreaterThan(0);
+    const imageBytes = await mediaFiles[0]!.async("nodebuffer");
+    expect(imageBytes.equals(LOGO_PNG)).toBe(true);
+  });
+});
+
+describe("fillDocxTemplate — mengt de twee matchstrategieën nooit binnen één vulling", () => {
+  it("negeert een incidenteel vetgedrukte paragraaf zodra er al Kop-stijl-matches zijn", async () => {
+    const doc = new Document({
+      sections: [
+        {
+          children: [
+            new Paragraph({ heading: HeadingLevel.HEADING_1, text: "Aanleiding en vraagstelling" }),
+            new Paragraph({ children: [new TextRun({ text: "Let op", bold: true })] }),
+            new Paragraph({ text: "TODO: vul hier de aanleiding in." }),
+            new Paragraph({ heading: HeadingLevel.HEADING_1, text: "Conclusie en vervolgadvies" }),
+            new Paragraph({ text: "TODO: vul hier de conclusie in." }),
+          ],
+        },
+      ],
+    });
+    const template = await Packer.toBuffer(doc);
+
+    const buffer = await fillDocxTemplate(template, {
+      chapters: [
+        chapter("Aanleiding en vraagstelling", "Inhoud A."),
+        chapter("Conclusie en vervolgadvies", "Inhoud B."),
+      ],
+      version: 1,
+      generatedAt: new Date(),
+      addChecklist: false,
+      addConceptFootnote: false,
+    });
+
+    const text = await extractPlainText(buffer);
+    // "Let op" is geen Kop-stijl-paragraaf: bij de (hier actieve) kopstijl-
+    // strategie hoort die gewoon bij de vervangen sectie-inhoud, en wordt niet
+    // apart als extra hoofdstukgrens opgevat.
+    expect(text).not.toContain("Let op");
+    expect(text).toContain("Inhoud A.");
+    expect(text).toContain("Inhoud B.");
+  });
+});

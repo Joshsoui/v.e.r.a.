@@ -37,6 +37,8 @@ export default function NewReportPage() {
   const [templateName, setTemplateName] = useState("");
   const [templateUploading, setTemplateUploading] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  const [templateUsedFallback, setTemplateUsedFallback] = useState(false);
+  const [lastUploadedFormatId, setLastUploadedFormatId] = useState<string | null>(null);
   const templateFileRef = useRef<HTMLInputElement>(null);
 
   const loadFormats = useCallback(
@@ -137,17 +139,20 @@ export default function NewReportPage() {
     }
     setTemplateUploading(true);
     setTemplateError(null);
+    setTemplateUsedFallback(false);
     try {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("name", templateName.trim());
       formData.append("documentTypeId", documentTypeId);
-      const { formatTemplate: created } = await apiJson<{ formatTemplate: { id: string } }>(
-        "/api/formats/from-template",
-        { method: "POST", body: formData },
-      );
+      const { formatTemplate: created, usedFallback } = await apiJson<{
+        formatTemplate: { id: string };
+        usedFallback: boolean;
+      }>("/api/formats/from-template", { method: "POST", body: formData });
       await loadFormats(created.id, documentTypeId);
       setTemplateName("");
+      setTemplateUsedFallback(usedFallback);
+      setLastUploadedFormatId(created.id);
       if (templateFileRef.current) templateFileRef.current.value = "";
     } catch (err) {
       setTemplateError(err instanceof Error ? err.message : "Kon sjabloon niet verwerken.");
@@ -253,6 +258,15 @@ export default function NewReportPage() {
                       <li key={c.key}>{c.title}</li>
                     ))}
                 </ol>
+              </div>
+            )}
+            {templateUsedFallback && formatTemplateId === lastUploadedFormatId && (
+              <div className="mt-2">
+                <Alert variant="info">
+                  Dit sjabloon gebruikte geen Word-kopstijlen (Kop 1/Kop 2) — de hoofdstukken hierboven
+                  zijn herkend aan vetgedrukte titelregels. Controleer of deze structuur klopt voordat je
+                  hiermee rapporten aanmaakt.
+                </Alert>
               </div>
             )}
           </div>

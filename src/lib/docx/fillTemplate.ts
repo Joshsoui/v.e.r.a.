@@ -14,6 +14,7 @@
 import JSZip from "jszip";
 import type { PersistedStatement } from "@/lib/reports/types";
 import type { ChapterStatusValue } from "@/lib/validators";
+import { looksLikeHeadingText } from "@/lib/docx/headingHeuristics";
 
 const CATEGORY_LABELS: Record<PersistedStatement["category"], string> = {
   FEIT: "feit",
@@ -195,7 +196,43 @@ function buildConceptNoticeXml(version: number, generatedAt: Date): string {
 // Hoofdfunctie
 // ---------------------------------------------------------------------------
 
-type ParaInfo = { start: number; end: number; text: string; styleId: string | null };
+type ParaInfo = {
+  start: number;
+  end: number;
+  text: string;
+  styleId: string | null;
+  isFullyBold: boolean;
+};
+
+/** Is een <w:r>-run vetgedrukt (expliciete <w:b/> zonder w:val="false"/"0")? */
+function isRunBold(runXml: string): boolean {
+  const rPrMatch = /<w:rPr>([\s\S]*?)<\/w:rPr>/.exec(runXml);
+  if (!rPrMatch) return false;
+  const bMatch = /<w:b\b([^/>]*)\/?>/.exec(rPrMatch[1] ?? "");
+  if (!bMatch) return false;
+  const valMatch = /w:val="([^"]+)"/.exec(bMatch[1] ?? "");
+  if (!valMatch?.[1]) return true;
+  return !/^(false|0)$/i.test(valMatch[1]);
+}
+
+/**
+ * Bestaat een paragraaf volledig uit vetgedrukte tekst (alle tekstdragende
+ * runs zijn bold)? Gebruikt door de sjabloon-fallback wanneer een template
+ * geen echte kopstijlen heeft, maar wel handmatig vetgedrukte "titels".
+ */
+function paragraphIsFullyBold(raw: string): boolean {
+  const runRegex = /<w:r\b[^>]*>[\s\S]*?<\/w:r>/g;
+  let match: RegExpExecArray | null;
+  let hasText = false;
+  while ((match = runRegex.exec(raw)) !== null) {
+    const runXml = match[0];
+    const text = extractParagraphText(runXml);
+    if (text.length === 0) continue;
+    hasText = true;
+    if (!isRunBold(runXml)) return false;
+  }
+  return hasText;
+}
 
 function parseParagraphs(documentXml: string): ParaInfo[] {
   const paragraphRegex = /<w:p\b[^>]*>[\s\S]*?<\/w:p>|<w:p\b[^>]*\/>/g;
@@ -209,9 +246,31 @@ function parseParagraphs(documentXml: string): ParaInfo[] {
       end: match.index + raw.length,
       text: extractParagraphText(raw),
       styleId: styleMatch?.[1] ?? null,
+      isFullyBold: paragraphIsFullyBold(raw),
     });
   }
   return paras;
+}
+
+/**
+ * Matcht elk hoofdstuk op tekst tegen een kandidatenlijst van paragraaf-
+ * indexen (kop-paragrafen), op volgorde van hoofdstukken. Elke kandidaat kan
+ * maar aan één hoofdstuk worden toegewezen.
+ */
+function matchChaptersToHeadings(
+  paras: ParaInfo[],
+  headingParaIndexes: number[],
+  chapters: FillTemplateChapter[],
+): (number | null)[] {
+  const usedParaIndexes = new Set<number>();
+  return chapters.map((chapter) => {
+    const target = normalizeHeadingText(chapter.title);
+    const idx = headingParaIndexes.find(
+      (i) => !usedParaIndexes.has(i) && normalizeHeadingText(paras[i]!.text) === target,
+    );
+    if (idx !== undefined) usedParaIndexes.add(idx);
+    return idx ?? null;
+  });
 }
 
 function findBodyContentEnd(documentXml: string): number {
@@ -225,11 +284,17 @@ function findBodyContentEnd(documentXml: string): number {
 
 /**
  * Vult het originele .docx-sjabloon met de gegenereerde hoofdstukinhoud.
- * Gooit een TemplateFillError met een begrijpelijke Nederlandse melding als
- * het sjabloon een onverwachte structuur heeft (bv. geen enkele herkenbare
- * kopstijl) — dit faalt bewust expliciet in plaats van stilzwijgend terug te
- * vallen op een generiek document, zodat nooit onopgemerkt het verkeerde
- * (niet-huisstijl) bestand wordt afgeleverd.
+ * Probeert eerst hoofdstuktitels te matchen tegen echte Word-kopstijlen
+ * (Kop 1/2/3); heeft het sjabloon die niet (of leverde dat geen enkele match
+ * op), dan valt dit terug op paragrafen die volledig vetgedrukt zijn en er
+ * qua vorm als een titel uitzien (zie headingHeuristics.ts) — dit is dezelfde
+ * heuristiek als bij het aanmaken van het format uit het sjabloon
+ * (templateExtraction.ts), zodat een bij upload herkend hoofdstuk hier ook
+ * daadwerkelijk teruggevonden wordt. Gooit een TemplateFillError met een
+ * begrijpelijke Nederlandse melding als geen van beide strategieën ook maar
+ * één hoofdstuktitel kan terugvinden — dit faalt bewust expliciet in plaats
+ * van stilzwijgend terug te vallen op een generiek document, zodat nooit
+ * onopgemerkt het verkeerde (niet-huisstijl) bestand wordt afgeleverd.
  */
 export async function fillDocxTemplate(templateBuffer: Buffer, input: FillTemplateInput): Promise<Buffer> {
   let zip: JSZip;
@@ -250,30 +315,39 @@ export async function fillDocxTemplate(templateBuffer: Buffer, input: FillTempla
   const headingStyleIds = findHeadingStyleIds(stylesXml);
   const headingStyleIdSet = new Set(headingStyleIds.values());
 
-  if (headingStyleIdSet.size === 0) {
-    throw new TemplateFillError(
-      "Kon geen kopstijlen (Kop 1/2/3) meer terugvinden in het sjabloon — is het bestand na het aanmaken van dit format gewijzigd?",
-    );
-  }
-
   const paras = parseParagraphs(documentXml);
-  const headingParaIndexes = paras
+
+  // Strategie 1: echte Word-kopstijlen (Kop 1/2/3).
+  const styleHeadingParaIndexes = paras
     .map((p, i) => (p.styleId && headingStyleIdSet.has(p.styleId) ? i : -1))
     .filter((i) => i >= 0);
 
-  const usedParaIndexes = new Set<number>();
-  const matchedParaIndexByChapter: (number | null)[] = input.chapters.map((chapter) => {
-    const target = normalizeHeadingText(chapter.title);
-    const idx = headingParaIndexes.find(
-      (i) => !usedParaIndexes.has(i) && normalizeHeadingText(paras[i]!.text) === target,
-    );
-    if (idx !== undefined) usedParaIndexes.add(idx);
-    return idx ?? null;
-  });
+  let headingParaIndexes = styleHeadingParaIndexes;
+  let matchedParaIndexByChapter =
+    styleHeadingParaIndexes.length > 0
+      ? matchChaptersToHeadings(paras, styleHeadingParaIndexes, input.chapters)
+      : input.chapters.map(() => null);
+
+  // Strategie 2 (fallback): sjablonen zonder echte kopstijlen, maar met
+  // handmatig vetgedrukte "titel"-paragrafen. Wordt alleen geprobeerd als
+  // strategie 1 geen enkele match opleverde — de twee strategieën worden
+  // nooit binnen één vulling gemengd, zodat incidenteel vetgedrukte tekst in
+  // een verder goed gestructureerd Kop1-sjabloon niet als extra (onbedoelde)
+  // hoofdstukgrens wordt opgevat.
+  if (matchedParaIndexByChapter.every((i) => i === null)) {
+    const boldHeadingParaIndexes = paras
+      .map((p, i) => (p.isFullyBold && looksLikeHeadingText(p.text) ? i : -1))
+      .filter((i) => i >= 0);
+    const boldMatches = matchChaptersToHeadings(paras, boldHeadingParaIndexes, input.chapters);
+    if (boldMatches.some((i) => i !== null)) {
+      headingParaIndexes = boldHeadingParaIndexes;
+      matchedParaIndexByChapter = boldMatches;
+    }
+  }
 
   if (matchedParaIndexByChapter.every((i) => i === null)) {
     throw new TemplateFillError(
-      "Geen van de hoofdstuktitels kon worden teruggevonden als kop in het sjabloon — is het bestand na het aanmaken van dit format gewijzigd?",
+      "Geen van de hoofdstuktitels kon worden teruggevonden als kop (of als vetgedrukte titel) in het sjabloon — is het bestand na het aanmaken van dit format gewijzigd?",
     );
   }
 

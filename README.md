@@ -72,8 +72,13 @@ haalt de Word-koppen (Kop 1/Kop 2/Kop 3) uit een geüpload .docx-bestand met `ma
 neemt het hoogste kopniveau als hoofdstukken, en slaat dat op als een nieuwe, org-eigen
 `FormatTemplate` — met generieke validator-regels (`buildGenericValidatorRules`, minimaal 1
 bewering per hoofdstuk) omdat we voor een willekeurig sjabloon geen domeinkennis hebben.
-Het geüploade sjabloon wordt zo letterlijk de structuur waarin de AI de aantekeningen
-opmaakt, met dezelfde zero-fabrication-waarborgen als elk ander format (hoofdstuk 3).
+Heeft het sjabloon geen echte kopstijlen (`extractHeadingsFromDocxWithFallback` levert dan
+minder dan 2 kopjes op), dan valt de extractie automatisch terug op paragrafen die volledig
+uit vetgedrukte tekst bestaan en er qua vorm als een titel uitzien (kort, geen afgeronde zin
+— `looksLikeHeadingText` in `src/lib/docx/headingHeuristics.ts`); de UI toont dan een melding
+dat de herkende hoofdstukstructuur gecontroleerd moet worden. Het geüploade sjabloon wordt zo
+letterlijk de structuur waarin de AI de aantekeningen opmaakt, met dezelfde
+zero-fabrication-waarborgen als elk ander format (hoofdstuk 3).
 
 **Het geüploade sjabloon-bestand zelf wordt ook bewaard** (`FormatTemplate.sourceDocx`,
 permanente organisatieconfiguratie — geen dossierinhoud, dus niet onderworpen aan de
@@ -81,17 +86,25 @@ retentie-purge) en bij export **hergebruikt in plaats van een generiek document 
 genereren**: `src/lib/docx/fillTemplate.ts` opent het originele .docx-bestand (een .docx is
 een zip met XML), vindt per hoofdstuk de bijbehorende kopparagraaf in `word/document.xml`
 door de titel te matchen tegen paragrafen met een echte Kop 1/2/3-stijl, en vervangt alleen
-de inhoud tussen die kop en de eerstvolgende kop door de gegenereerde hoofdstuktekst.
-Alle andere onderdelen van het bestand — logo's/afbeeldingen, briefhoofd, lettertypen,
-paginamarges, kop-/voettekst — blijven volledig ongewijzigd, want die staan in andere delen
-van het zip-archief (`word/styles.xml`, `word/header*.xml`, `word/media/*`, …) die nooit
-worden aangeraakt. Het exportbestand ziet er zo daadwerkelijk uit als het officiële
-gemeentelijke document, niet als een generiek V.E.R.A.-document. Een hoofdstuk waarvan de
-titel niet als kop teruggevonden wordt (bv. omdat het sjabloon na het aanmaken van het
-format gewijzigd is) wordt niet stilzwijgend weggelaten, maar met een eigen kop achteraan
-toegevoegd. Gedeelde/geseede formats hebben geen eigen sjabloon-bestand (`sourceDocx` is
-dan `null`) en gebruiken bij export nog steeds de generieke generator
-(`src/lib/docx/export.ts`) — geen regressie voor die formats.
+de inhoud tussen die kop en de eerstvolgende kop door de gegenereerde hoofdstuktekst. Levert
+die kopstijl-matching geen enkel resultaat op (het sjabloon gebruikt geen echte kopstijlen),
+dan probeert `fillDocxTemplate` daarna dezelfde matching tegen paragrafen die volledig
+vetgedrukt zijn en er als titel uitzien — hetzelfde `looksLikeHeadingText`-criterium als bij
+de upload-extractie, zodat een bij upload herkend hoofdstuk hier ook echt teruggevonden
+wordt. De twee strategieën worden nooit binnen één export gemengd: zodra de kopstijl-matching
+al één match oplevert, wordt de vetgedrukte-titel-fallback niet meer geprobeerd, zodat
+incidenteel vetgedrukte tekst in een verder goed gestructureerd Kop1-sjabloon niet als
+onbedoelde extra hoofdstukgrens wordt opgevat. Alle andere onderdelen van het bestand —
+logo's/afbeeldingen, briefhoofd, lettertypen, paginamarges, kop-/voettekst — blijven volledig
+ongewijzigd, want die staan in andere delen van het zip-archief (`word/styles.xml`,
+`word/header*.xml`, `word/media/*`, …) die nooit worden aangeraakt. Het exportbestand ziet er
+zo daadwerkelijk uit als het officiële gemeentelijke document, niet als een generiek
+V.E.R.A.-document. Een hoofdstuk waarvan de titel niet teruggevonden wordt (via geen van
+beide strategieën — bv. omdat het sjabloon na het aanmaken van het format gewijzigd is) wordt
+niet stilzwijgend weggelaten, maar met een eigen kop achteraan toegevoegd. Gedeelde/geseede
+formats hebben geen eigen sjabloon-bestand (`sourceDocx` is dan `null`) en gebruiken bij
+export nog steeds de generieke generator (`src/lib/docx/export.ts`) — geen regressie voor die
+formats.
 
 ### AIProvider-abstractie
 
@@ -363,21 +376,27 @@ opgegeven spec. Onderstaande keuzes/aannames zijn daarbij gemaakt:
     nu dynamisch i.p.v. statisch prerenderd), maar dat weegt niet op tegen
     een kapotte UI. Lokaal geverifieerd door de gebouwde HTML te inspecteren
     op nonce-consistentie vóór het pushen.
-15. **Sjabloon-upload herkent alleen Word-kopstijlen, geen platte opmaak.** De
-    hoofdstukextractie uit een geüpload .docx-sjabloon (`headingsToChapterDefinitions`)
-    leest de officiële Word-kopstijlen (Kop 1/Kop 2/Kop 3) uit; een sjabloon met alleen
-    vetgedrukte tekst zonder kopstijl levert geen hoofdstukken op (met een duidelijke
-    foutmelding die daarnaar verwijst). Dit is een bewuste, eenvoudige eerste versie —
-    een layout-heuristiek (bv. korte, vetgedrukte regels als fallback) zou vervolgwerk zijn.
-    Ook krijgt elk hoofdstuk uit een sjabloon generieke AI-instructies en generieke
-    validator-regels (minimaal 1 bewering, geen verplichte categorie) — voor de seed-formats
-    is dat domeinspecifiek uitgeschreven, voor een willekeurig geüpload sjabloon kan dat niet.
-    Sub-kopjes (een dieper kopniveau dan het hoogste in het document) worden genegeerd,
-    niet als apart hoofdstuk behandeld.
+15. **Sjabloon-upload herkent Word-kopstijlen, met een vetgedrukte-titel-fallback.** De
+    hoofdstukextractie uit een geüpload .docx-sjabloon (`extractHeadingsFromDocxWithFallback`
+    in `src/lib/formats/templateExtraction.ts`) leest eerst de officiële Word-kopstijlen
+    (Kop 1/Kop 2/Kop 3) uit. Levert dat minder dan 2 hoofdstukken op — het sjabloon gebruikt
+    dan waarschijnlijk geen kopstijlen, bv. alleen handmatig vetgedrukte "titels" — dan valt de
+    extractie terug op paragrafen die volledig uit vetgedrukte tekst bestaan en er qua
+    lengte/vorm als een titel uitzien (`looksLikeHeadingText`, gedeeld met de export-matching,
+    zie punt 16). De UI toont dan een melding dat de herkende structuur gecontroleerd moet
+    worden. Zijn er ook dan te weinig herkenbare titels, dan faalt de upload alsnog met een
+    duidelijke foutmelding. Ook krijgt elk hoofdstuk uit een sjabloon generieke AI-instructies
+    en generieke validator-regels (minimaal 1 bewering, geen verplichte categorie) — voor de
+    seed-formats is dat domeinspecifiek uitgeschreven, voor een willekeurig geüpload sjabloon
+    kan dat niet. Sub-kopjes (een dieper kopniveau dan het hoogste in het document) worden
+    genegeerd, niet als apart hoofdstuk behandeld.
 16. **Sjabloon-fill bij export matcht op kop-tekst, geen placeholder-syntax.** In plaats van
     een echte "mail merge" met placeholders (bv. `{{aanleiding}}`) in het sjabloon, matcht
     `fillDocxTemplate` een hoofdstuk aan een kop puur op exact overeenkomende tekst (na
-    trimmen/lowercasen) met een paragraaf die een Kop 1/2/3-stijl heeft. Wordt de koptekst in
+    trimmen/lowercasen) — eerst tegen paragrafen met een Kop 1/2/3-stijl, en alleen als dat
+    geen enkele match oplevert alsnog tegen volledig vetgedrukte titelregels (dezelfde
+    `looksLikeHeadingText`-heuristiek als bij upload, zie `src/lib/docx/headingHeuristics.ts`)
+    — de twee strategieën worden nooit binnen één export gemengd. Wordt de koptekst in
     het sjabloon ná het aanmaken van het format gewijzigd, dan wordt dat hoofdstuk niet meer
     herkend en in plaats daarvan met een eigen (gesynthetiseerde) kop achteraan toegevoegd —
     nooit stilzwijgend weggelaten. Opsommingen (ontbrekende-informatiepunten) worden als

@@ -6,6 +6,7 @@
 
 import mammoth from "mammoth";
 import type { ChapterDefinition } from "@/lib/formats/types";
+import { looksLikeHeadingText } from "@/lib/docx/headingHeuristics";
 
 export type ExtractedHeading = { level: number; title: string };
 
@@ -33,6 +34,57 @@ export async function extractHeadingsFromDocx(buffer: Buffer): Promise<Extracted
     if (title.length > 0) headings.push({ level, title });
   }
   return headings;
+}
+
+/**
+ * Fallback voor sjablonen zonder echte Word-kopstijlen: sommige gemeentelijke
+ * sjablonen gebruiken alleen handmatig vetgedrukte tekst als "titel". Een
+ * paragraaf die volledig (en alleen) uit vetgedrukte tekst bestaat en er qua
+ * lengte/vorm als een titel uitziet (looksLikeHeadingText), tellen we als
+ * hoofdstuktitel. Dit criterium moet identiek zijn aan wat fillTemplate.ts
+ * bij export gebruikt om diezelfde titels terug te vinden — zie
+ * src/lib/docx/headingHeuristics.ts.
+ */
+export async function extractBoldParagraphHeadings(buffer: Buffer): Promise<ExtractedHeading[]> {
+  const result = await mammoth.convertToHtml({ buffer });
+  const html = result.value;
+  const headings: ExtractedHeading[] = [];
+  const paraRegex = /<p[^>]*>(.*?)<\/p>/gis;
+  let match: RegExpExecArray | null;
+  while ((match = paraRegex.exec(html)) !== null) {
+    const inner = match[1];
+    if (inner === undefined) continue;
+    const boldMatch = /^\s*<strong>(.*?)<\/strong>\s*$/is.exec(inner);
+    if (!boldMatch) continue;
+    const boldContent = boldMatch[1];
+    if (boldContent === undefined) continue;
+    // Sla over als er binnen de vetgedrukte tekst nog andere opmaak-tags
+    // zitten die niet puur tekstueel zijn (bv. een afbeelding).
+    if (/<(?!\/?em>|\/?strong>)[a-z]/i.test(boldContent)) continue;
+    const title = decodeEntities(boldContent.replace(/<[^>]+>/g, "")).trim();
+    if (title.length > 0 && looksLikeHeadingText(title)) {
+      headings.push({ level: 1, title });
+    }
+  }
+  return headings;
+}
+
+/**
+ * Probeert eerst echte Word-kopstijlen; valt terug op vetgedrukte paragrafen
+ * als dat te weinig oplevert om een bruikbare hoofdstukstructuur te vormen.
+ */
+export async function extractHeadingsFromDocxWithFallback(
+  buffer: Buffer,
+): Promise<{ headings: ExtractedHeading[]; usedFallback: boolean }> {
+  const realHeadings = await extractHeadingsFromDocx(buffer);
+  if (realHeadings.length >= 2) {
+    return { headings: realHeadings, usedFallback: false };
+  }
+  const boldHeadings = await extractBoldParagraphHeadings(buffer);
+  if (boldHeadings.length >= 2) {
+    return { headings: boldHeadings, usedFallback: true };
+  }
+  return { headings: realHeadings, usedFallback: false };
 }
 
 function slugify(title: string): string {

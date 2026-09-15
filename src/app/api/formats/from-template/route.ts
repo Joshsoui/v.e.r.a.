@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireSession } from "@/lib/auth/guard";
 import { assertValidUploadFile, UploadValidationException } from "@/lib/upload/validate";
-import { extractHeadingsFromDocx, headingsToChapterDefinitions } from "@/lib/formats/templateExtraction";
+import { extractHeadingsFromDocxWithFallback, headingsToChapterDefinitions } from "@/lib/formats/templateExtraction";
 import { defaultWritingStyles, buildGenericValidatorRules } from "@/lib/formats/defaults";
 import { writeAuditLog, hashIp, getClientIp } from "@/lib/security/audit";
 import { ApiError, handleApiError, jsonError } from "@/lib/utils/errors";
@@ -44,14 +44,15 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const headings = await extractHeadingsFromDocx(buffer);
+    const { headings, usedFallback } = await extractHeadingsFromDocxWithFallback(buffer);
     const chapters = headingsToChapterDefinitions(headings);
 
     if (chapters.length < 2) {
       throw new ApiError(
         400,
         "Kon geen hoofdstukstructuur uit dit sjabloon halen. Zorg dat de kopjes in het " +
-          "Word-document zijn opgemaakt met een kopstijl (Kop 1/Kop 2), niet alleen vet gedrukte tekst.",
+          "Word-document zijn opgemaakt met een kopstijl (Kop 1/Kop 2), of anders als losse, " +
+          "volledig vetgedrukte titelregel (bv. \"1. Aanleiding\").",
       );
     }
 
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(
-      { formatTemplate: { id: formatTemplate.id, name: formatTemplate.name, chapters } },
+      { formatTemplate: { id: formatTemplate.id, name: formatTemplate.name, chapters }, usedFallback },
       { status: 201 },
     );
   } catch (err) {
