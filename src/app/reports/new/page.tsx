@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiJson } from "@/lib/client/apiFetch";
-import { Button, Card, Label, Alert } from "@/components/ui/primitives";
+import { Button, Card, Label, Alert, Badge } from "@/components/ui/primitives";
 
 type WritingStyle = { key: string; label: string; description: string };
 type ChapterDefinition = { key: string; title: string; order: number };
@@ -13,6 +13,7 @@ type FormatTemplate = {
   name: string;
   municipality: string | null;
   isDefault: boolean;
+  organizationId: string | null;
   writingStyles: WritingStyle[];
   chapters: ChapterDefinition[];
 };
@@ -68,7 +69,12 @@ export default function NewReportPage() {
         const firstDocType = firstDiscipline.documentTypes[0];
         if (firstDocType) {
           setDocumentTypeId(firstDocType.id);
-          const firstFormat = firstDocType.formatTemplates[0];
+          // Geef voorkeur aan een eigen, door de organisatie geüpload sjabloon
+          // boven het gedeelde standaardformat — anders wordt bij het
+          // aanmaken van een rapport per ongeluk het format zonder eigen
+          // logo/huisstijl geselecteerd, ook als er al een eigen sjabloon is.
+          const ownFormat = firstDocType.formatTemplates.find((f) => f.organizationId !== null);
+          const firstFormat = ownFormat ?? firstDocType.formatTemplates[0];
           if (firstFormat) {
             setFormatTemplateId(firstFormat.id);
             setWritingStyleKey(firstFormat.writingStyles[0]?.key ?? "");
@@ -95,6 +101,8 @@ export default function NewReportPage() {
   const formatTemplates = documentType?.formatTemplates ?? [];
   const formatTemplate = formatTemplates.find((f) => f.id === formatTemplateId);
   const writingStyles = formatTemplate?.writingStyles ?? [];
+  const ownFormatTemplates = formatTemplates.filter((f) => f.organizationId !== null);
+  const sharedFormatTemplates = formatTemplates.filter((f) => f.organizationId === null);
 
   async function onSubmit() {
     if (!formatTemplateId) {
@@ -192,7 +200,9 @@ export default function NewReportPage() {
                 setDisciplineId(e.target.value);
                 const firstDocType = d?.documentTypes[0];
                 setDocumentTypeId(firstDocType?.id ?? "");
-                const firstFormat = firstDocType?.formatTemplates[0];
+                const firstFormat =
+                  firstDocType?.formatTemplates.find((f) => f.organizationId !== null) ??
+                  firstDocType?.formatTemplates[0];
                 setFormatTemplateId(firstFormat?.id ?? "");
                 setWritingStyleKey(firstFormat?.writingStyles[0]?.key ?? "");
               }}
@@ -214,7 +224,8 @@ export default function NewReportPage() {
               onChange={(e) => {
                 const dt = documentTypes.find((x) => x.id === e.target.value);
                 setDocumentTypeId(e.target.value);
-                const firstFormat = dt?.formatTemplates[0];
+                const firstFormat =
+                  dt?.formatTemplates.find((f) => f.organizationId !== null) ?? dt?.formatTemplates[0];
                 setFormatTemplateId(firstFormat?.id ?? "");
                 setWritingStyleKey(firstFormat?.writingStyles[0]?.key ?? "");
               }}
@@ -239,13 +250,38 @@ export default function NewReportPage() {
                 setWritingStyleKey(f?.writingStyles[0]?.key ?? "");
               }}
             >
-              {formatTemplates.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                  {f.municipality ? ` (${f.municipality})` : ""}
-                </option>
-              ))}
+              {ownFormatTemplates.length > 0 && (
+                <optgroup label="Eigen sjabloon van jouw organisatie">
+                  {ownFormatTemplates.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                      {f.municipality ? ` (${f.municipality})` : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {sharedFormatTemplates.length > 0 && (
+                <optgroup label="Standaard formats van V.E.R.A. (geen eigen huisstijl/logo)">
+                  {sharedFormatTemplates.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                      {f.municipality ? ` (${f.municipality})` : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
+            {formatTemplate && (
+              <p className="mt-1.5 text-xs">
+                {formatTemplate.organizationId ? (
+                  <Badge variant="success">Eigen sjabloon — met jullie logo/huisstijl</Badge>
+                ) : (
+                  <Badge variant="neutral">
+                    Standaardformat van V.E.R.A. — geen eigen logo/huisstijl
+                  </Badge>
+                )}
+              </p>
+            )}
             {formatTemplate && formatTemplate.chapters.length > 0 && (
               <div className="mt-2 rounded-md bg-gray-50 px-3 py-2">
                 <p className="mb-1 text-xs font-medium text-gray-600">

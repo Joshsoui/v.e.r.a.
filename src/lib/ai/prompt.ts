@@ -16,6 +16,10 @@ export function buildSystemPrompt(disciplineName: string, documentTypeName: stri
     "5. Als een hoofdstuk helemaal geen relevante informatie in de bronnen heeft, geef je een lege \"statements\"-lijst en beschrijf je in \"missingInfo\" wat er ontbreekt. Verzin geen vulinhoud.",
     "6. Herformuleer/structureer gerust (nette volzinnen, professioneel Nederlands, geen jargon uit de brontekst dat de betrokkene niet zou begrijpen in een citaat), maar de INHOUD (wie, wat, wanneer, hoeveel) moet exact overeenkomen met wat in de bron staat.",
     "",
+    "SCHRIJFSTIJL PER HOOFDSTUK — minstens zo belangrijk als de structuur hierboven:",
+    "7. Neem losse aantekeningen NOOIT elk apart en bijna woordelijk over als los rijtje korte zinnetjes. Voeg aantekeningen die hetzelfde punt raken of logisch bij elkaar horen SAMEN tot één vloeiend geschreven, samenhangende bewering. Een bewering mag daarom prima op meerdere brontekst-segmenten tegelijk gebaseerd zijn (dan citeer je die segment-ID's allemaal in sourceRefs) — zo lang de INHOUD exact overeenkomt met wat er in die segmenten staat, mag je de zinnen zelf herschrijven tot lopende tekst met natuurlijke verbindingswoorden (\"daarnaast\", \"hierdoor\", \"dit sluit aan bij\", \"opvallend hierbij is dat\").",
+    "8. Bouw de beweringen binnen elk hoofdstuk zo op dat ze samen lezen als één lopend verhaal dat toewerkt naar een onderbouwing: begin met de relevante feiten, werk via de verklaringen van betrokkenen toe naar de professionele duiding, in plaats van een willekeurige opeenvolging van losse zinnen. Dit is uitsluitend een kwestie van VOLGORDE en VERBINDING tussen bestaande, in de bron aangetroffen informatie — verzin hierbij nooit een nieuwe conclusie, samenvatting of duiding die niet al expliciet door een professional in de brontekst is opgeschreven; ontbreekt die duiding in de bron, dan hoort hij ook niet in het hoofdstuk (zie regel 4 en 5).",
+    "",
     "Je antwoordt uitsluitend met gestructureerde data volgens het opgegeven schema — geen vrije tekst, geen uitleg, geen markdown.",
   ].join("\n");
 }
@@ -53,6 +57,7 @@ export function buildUserPrompt(
     "## Brontekst (met segment-ID's tussen vierkante haken — citeer alleen deze ID's)",
     sourceBlock,
     "",
-    "Vul voor elk hierboven genoemd hoofdstuk (en uitsluitend deze hoofdstukken, met exact de gegeven \"key\"-waarde) de statements en missingInfo in, volgens de zero-fabrication-regels uit de systeeminstructie.",
+    "Vul voor elk hierboven genoemd hoofdstuk (en uitsluitend deze hoofdstukken, met exact de gegeven \"key\"-waarde) de statements en missingInfo in, volgens de zero-fabrication-regels uit de systeeminstructie. " +
+      "Voeg samenhangende aantekeningen samen tot een vloeiend verhaal per hoofdstuk (regel 7 en 8) — géén los rijtje bijna woordelijk overgenomen zinnetjes.",
   ].join("\n");
 }
