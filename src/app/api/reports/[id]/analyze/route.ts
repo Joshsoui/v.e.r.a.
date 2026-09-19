@@ -4,9 +4,13 @@ import { prisma } from "@/lib/db/prisma";
 import { requireSession } from "@/lib/auth/guard";
 import { getReportOrThrow } from "@/lib/reports/access";
 import { parseChapters, parseWritingStyles, parseValidatorRules } from "@/lib/formats/types";
-import { segmentSources } from "@/lib/ai/sourceSegments";
+import { segmentSources, segmentRegulations } from "@/lib/ai/sourceSegments";
 import { getAIProvider } from "@/lib/ai";
-import { findUnverifiedSourceRefs, validateChapterKeyCompleteness } from "@/lib/validators";
+import {
+  findUnverifiedSourceRefs,
+  findMisusedRegulationRefs,
+  validateChapterKeyCompleteness,
+} from "@/lib/validators";
 import type { PersistedStatement } from "@/lib/reports/types";
 import { checkRateLimit } from "@/lib/security/rateLimit";
 import { writeAuditLog, hashIp, getClientIp } from "@/lib/security/audit";
@@ -43,6 +47,13 @@ export async function POST(req: NextRequest, { params }: Params) {
       })),
     );
 
+    const regulations = await prisma.regulation.findMany({
+      where: { organizationId: session.organizationId },
+      select: { id: true, title: true, content: true },
+    });
+    const regulationSegments = segmentRegulations(regulations);
+    const regulationSegmentIds = new Set(regulationSegments.map((s) => s.id));
+
     const provider = getAIProvider();
     const analysis = await provider.analyzeReport({
       disciplineName: report.formatTemplate.documentType.discipline.name,
@@ -50,6 +61,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       chapters,
       writingStyle,
       segments,
+      regulationSegments,
     });
 
     const completeness = validateChapterKeyCompleteness(
@@ -74,8 +86,15 @@ export async function POST(req: NextRequest, { params }: Params) {
         const def = chapterDefsByKey.get(chapterResult.key);
         if (!def) continue; // kan niet gebeuren na completeness-check, maar defensief
 
-        const unverified = findUnverifiedSourceRefs(chapterResult.statements, segments);
-        const unverifiedIndexes = new Set(unverified.map((u) => u.statementIndex));
+        const unverified = findUnverifiedSourceRefs(chapterResult.statements, [
+          ...segments,
+          ...regulationSegments,
+        ]);
+        const misusedRegulation = findMisusedRegulationRefs(chapterResult.statements, regulationSegmentIds);
+        const unverifiedIndexes = new Set([
+          ...unverified.map((u) => u.statementIndex),
+          ...misusedRegulation,
+        ]);
 
         const persistedStatements: PersistedStatement[] = chapterResult.statements.map(
           (s, idx) => ({

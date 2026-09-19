@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/auth/guard";
 import { getReportOrThrow } from "@/lib/reports/access";
 import { updateChapterSchema } from "@/lib/validation/reports";
 import { parseValidatorRules } from "@/lib/formats/types";
-import { segmentSources } from "@/lib/ai/sourceSegments";
+import { segmentSources, segmentRegulations } from "@/lib/ai/sourceSegments";
 import { findUnverifiedSourceRefs, validateChapter } from "@/lib/validators";
 import type { PersistedStatement } from "@/lib/reports/types";
 import { writeAuditLog, hashIp, getClientIp } from "@/lib/security/audit";
@@ -39,13 +39,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         extractedText: s.extractedText,
       })),
     );
+    const regulations = await prisma.regulation.findMany({
+      where: { organizationId: session.organizationId },
+      select: { id: true, title: true, content: true },
+    });
+    const regulationSegments = segmentRegulations(regulations);
 
     const statementsForVerification = parsed.data.statements.map((s) => ({
       text: s.text,
       category: s.category,
       sourceRefs: s.sourceRefs,
     }));
-    const unverified = findUnverifiedSourceRefs(statementsForVerification, segments);
+    const unverified = findUnverifiedSourceRefs(statementsForVerification, [
+      ...segments,
+      ...regulationSegments,
+    ]);
     const unverifiedIndexes = new Set(unverified.map((u) => u.statementIndex));
 
     const persistedStatements: PersistedStatement[] = parsed.data.statements.map((s, idx) => ({

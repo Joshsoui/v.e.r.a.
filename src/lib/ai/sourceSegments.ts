@@ -50,3 +50,37 @@ export function formatSegmentsForPrompt(segments: SourceSegment[]): string {
     .map((s) => `[${s.id}] (${s.sourceLabel}, alinea ${s.index})\n${s.text}`)
     .join("\n\n");
 }
+
+export type RegulationForSegmentation = { id: string; title: string; content: string };
+
+/**
+ * Segmenteert verordeningen op exact dezelfde manier als segmentSources(),
+ * maar met een "V"-prefix (V1-3 = verordening 1, alinea 3) in plaats van "B"
+ * — zo zijn casusbron-citaten en verordening-citaten aan hun ID altijd
+ * meteen te onderscheiden, ook in de UI (SourceTextPanel/SourceRefsEditor).
+ */
+export function segmentRegulations(regulations: RegulationForSegmentation[]): SourceSegment[] {
+  const segments: SourceSegment[] = [];
+
+  regulations.forEach((regulation, regulationIndex) => {
+    const label = `Verordening ${regulationIndex + 1} (${regulation.title})`;
+    const paragraphs = regulation.content
+      .split(/\n{2,}|\r\n\r\n/g)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+    const units =
+      paragraphs.length > 1 ? paragraphs : regulation.content.split(/\n/).map((p) => p.trim()).filter(Boolean);
+
+    units.forEach((text, unitIndex) => {
+      segments.push({
+        id: `V${regulationIndex + 1}-${unitIndex + 1}`,
+        sourceDocumentId: regulation.id,
+        sourceLabel: label,
+        index: unitIndex + 1,
+        text,
+      });
+    });
+  });
+
+  return segments;
+}

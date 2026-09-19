@@ -33,7 +33,9 @@ export type AuditAction =
   | "report.export"
   | "format.create_from_template"
   | "report.delete"
-  | "account.data_delete";
+  | "account.data_delete"
+  | "regulation.create"
+  | "regulation.delete";
 
 type AuditEntry = {
   organizationId: string;

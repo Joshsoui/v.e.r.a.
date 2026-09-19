@@ -67,8 +67,39 @@ model Organization {
   reports         Report[]
   auditLogs       AuditLog[]
   formatTemplates FormatTemplate[]
+  regulations     Regulation[]
 
   @@map("organizations")
+}
+
+/// Een (deel van een) gemeentelijke verordening die de AI mag citeren als
+/// ondersteunende juridische onderbouwing bij een professionele duiding —
+/// nooit als bron voor casusfeiten zelf. Net als FormatTemplate.sourceDocx is
+/// dit organisatie-CONFIGURATIE, geen dossierinhoud: blijft permanent bewaard
+/// en valt NIET onder de retentie-purge (scripts/purge-expired.ts).
+model Regulation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  title String
+
+  /// Herkomst-URL, alleen ter referentie/weergave — de daadwerkelijke tekst
+  /// die de AI ziet staat in `content`, nooit een live her-ophaling bij elke
+  /// analyse (traceerbaarheid: de geciteerde tekst moet exact blijven
+  /// overeenkomen met wat er stond op het moment van toevoegen).
+  sourceUrl String?
+
+  /// Platte tekst van de verordening (of het relevante deel ervan), door de
+  /// admin geplakt of bij toevoegen server-side opgehaald en uit HTML
+  /// geëxtraheerd. Dit is de enige tekst die de AI ooit te zien krijgt.
+  content String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("regulations")
 }
 
 model User {

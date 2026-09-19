@@ -112,6 +112,34 @@ export function findUnverifiedSourceRefs(
 }
 
 /**
+ * Defense-in-depth naast de promptinstructie (prompt.ts, regel 9): een
+ * verordening-segment (V-ID) mag de AI uitsluitend gebruiken als AANVULLING
+ * op een professionele duiding die al op de casusbrontekst (B-ID's)
+ * gebaseerd is — nooit als enige bronverwijzing, en nooit bij een FEIT of
+ * VERKLARING. Detecteert of het model die regel toch overtreden heeft, zodat
+ * zo'n bewering als "niet geverifieerd" behandeld kan worden in plaats van
+ * stilzwijgend vertrouwd (dezelfde afhandeling als findUnverifiedSourceRefs).
+ */
+export function findMisusedRegulationRefs(
+  statements: ValidatableStatement[],
+  regulationSegmentIds: Set<string> | string[],
+): number[] {
+  const regulationIds = regulationSegmentIds instanceof Set ? regulationSegmentIds : new Set(regulationSegmentIds);
+  if (regulationIds.size === 0) return [];
+
+  const result: number[] = [];
+  statements.forEach((statement, index) => {
+    const regulationRefs = statement.sourceRefs.filter((ref) => regulationIds.has(ref));
+    if (regulationRefs.length === 0) return;
+
+    const hasNonRegulationRef = statement.sourceRefs.some((ref) => !regulationIds.has(ref));
+    const misused = statement.category !== "PROFESSIONELE_DUIDING" || !hasNonRegulationRef;
+    if (misused) result.push(index);
+  });
+  return result;
+}
+
+/**
  * Controleert dat de AI-output exact de verwachte hoofdstukken bevat (geen
  * extra, geen ontbrekende, geen duplicaten) — beschermt tegen het "verzinnen"
  * van hoofdstukken buiten het gekozen format.

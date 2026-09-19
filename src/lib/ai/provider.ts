@@ -8,6 +8,8 @@ export type AnalyzeReportInput = {
   chapters: ChapterDefinition[];
   writingStyle: WritingStyleOption | null;
   segments: SourceSegment[];
+  /** Verordening-segmenten (V-ID's) — zie prompt.ts regel 9 voor het gebruik. */
+  regulationSegments?: SourceSegment[];
 };
 
 /**

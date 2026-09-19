@@ -22,12 +22,13 @@ export class OpenAIProvider implements AIProvider {
 
   async analyzeReport(input: AnalyzeReportInput): Promise<ReportAnalysis> {
     const chapterKeys = input.chapters.map((c) => c.key);
-    const segmentIds = input.segments.map((s) => s.id);
+    const regulationSegments = input.regulationSegments ?? [];
+    const segmentIds = [...input.segments, ...regulationSegments].map((s) => s.id);
     const schema = buildReportAnalysisSchemaForChapters(chapterKeys, segmentIds);
     const jsonSchema = toStrictJsonSchema(schema);
 
     const instructions = buildSystemPrompt(input.disciplineName, input.documentTypeName);
-    const userInput = buildUserPrompt(input.chapters, input.writingStyle, input.segments);
+    const userInput = buildUserPrompt(input.chapters, input.writingStyle, input.segments, regulationSegments);
 
     let response;
     try {

@@ -44,11 +44,16 @@ export default async function DashboardPage() {
         <AccountMenu userName={user.name} organizationName={user.organization.name} />
       </div>
 
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-gray-800">Mijn rapporten</h2>
-        <Link href="/reports/new">
-          <Button>+ Nieuw rapport</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/organisatie/verordeningen">
+            <Button variant="ghost">Verordeningen</Button>
+          </Link>
+          <Link href="/reports/new">
+            <Button>+ Nieuw rapport</Button>
+          </Link>
+        </div>
       </div>
 
       {reports.length === 0 ? (

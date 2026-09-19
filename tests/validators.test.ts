@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   validateChapter,
   findUnverifiedSourceRefs,
+  findMisusedRegulationRefs,
   validateChapterKeyCompleteness,
 } from "@/lib/validators";
 import type { SourceSegment } from "@/lib/ai/sourceSegments";
@@ -94,6 +95,61 @@ describe("findUnverifiedSourceRefs (zero-fabrication-bewaking)", () => {
     );
     expect(result).toHaveLength(1);
     expect(result[0]?.invalidRefs).toEqual(["B9-9"]);
+  });
+});
+
+describe("findMisusedRegulationRefs", () => {
+  const regulationIds = new Set(["V1-1", "V1-2"]);
+
+  it("geeft geen misbruik terug als er geen verordening-ids zijn opgegeven", () => {
+    const result = findMisusedRegulationRefs(
+      [{ text: "x", category: "PROFESSIONELE_DUIDING", sourceRefs: ["V1-1"] }],
+      new Set(),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("staat een PROFESSIONELE_DUIDING toe die zowel een B-id als een V-id citeert", () => {
+    const result = findMisusedRegulationRefs(
+      [{ text: "x", category: "PROFESSIONELE_DUIDING", sourceRefs: ["B1-1", "V1-1"] }],
+      regulationIds,
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("markeert een PROFESSIONELE_DUIDING die UITSLUITEND een V-id citeert", () => {
+    const result = findMisusedRegulationRefs(
+      [{ text: "x", category: "PROFESSIONELE_DUIDING", sourceRefs: ["V1-1"] }],
+      regulationIds,
+    );
+    expect(result).toEqual([0]);
+  });
+
+  it("markeert een FEIT dat een V-id citeert, ook naast een B-id", () => {
+    const result = findMisusedRegulationRefs(
+      [{ text: "x", category: "FEIT", sourceRefs: ["B1-1", "V1-1"] }],
+      regulationIds,
+    );
+    expect(result).toEqual([0]);
+  });
+
+  it("markeert een VERKLARING die een V-id citeert", () => {
+    const result = findMisusedRegulationRefs(
+      [{ text: "x", category: "VERKLARING", sourceRefs: ["B1-1", "V1-2"] }],
+      regulationIds,
+    );
+    expect(result).toEqual([0]);
+  });
+
+  it("raakt statements zonder enige V-id niet aan", () => {
+    const result = findMisusedRegulationRefs(
+      [
+        { text: "a", category: "FEIT", sourceRefs: ["B1-1"] },
+        { text: "b", category: "PROFESSIONELE_DUIDING", sourceRefs: ["B1-1", "V1-1"] },
+      ],
+      regulationIds,
+    );
+    expect(result).toEqual([]);
   });
 });
 

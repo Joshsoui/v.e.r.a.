@@ -6,7 +6,7 @@ import { updateReportSettingsSchema } from "@/lib/validation/reports";
 import { parseChapters, parseWritingStyles, parseValidatorRules } from "@/lib/formats/types";
 import { computeChapterIssues } from "@/lib/reports/service";
 import { persistedStatementsArraySchema, missingInfoArraySchema } from "@/lib/reports/types";
-import { segmentSources } from "@/lib/ai/sourceSegments";
+import { segmentSources, segmentRegulations } from "@/lib/ai/sourceSegments";
 import { writeAuditLog, hashIp, getClientIp } from "@/lib/security/audit";
 import { ApiError, handleApiError } from "@/lib/utils/errors";
 import { env } from "@/lib/env";
@@ -24,6 +24,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     const sourceSegments = segmentSources(
       report.sources.map((s) => ({ id: s.id, filename: s.filename, extractedText: s.extractedText })),
     );
+    const regulations = await prisma.regulation.findMany({
+      where: { organizationId: session.organizationId },
+      select: { id: true, title: true, content: true },
+    });
+    const regulationSegments = segmentRegulations(regulations);
 
     return NextResponse.json({
       report: {
@@ -52,7 +57,7 @@ export async function GET(req: NextRequest, { params }: Params) {
           charCount: s.charCount,
           createdAt: s.createdAt,
         })),
-        sourceSegments: sourceSegments.map((seg) => ({
+        sourceSegments: [...sourceSegments, ...regulationSegments].map((seg) => ({
           id: seg.id,
           sourceLabel: seg.sourceLabel,
           index: seg.index,

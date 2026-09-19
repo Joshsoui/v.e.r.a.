@@ -123,8 +123,9 @@ prisma.config.ts             Prisma 7 config (migraties via DIRECT_URL)
 src/lib/ai/                  AIProvider-interface, OpenAI-implementatie, schema, prompt, segmentatie
 src/lib/formats/             Config-types voor FormatTemplate + sjabloon-upload-extractie (templateExtraction.ts)
 src/lib/validators/          Deterministische (niet-AI) volledigheidsvalidatie
-src/lib/auth/                Wachtwoorden, sessie-JWT, CSRF, guard-helpers
-src/lib/security/            Rate limiting, audit-logging
+src/lib/auth/                Wachtwoorden, sessie-JWT, CSRF, guard-helpers (incl. rolcontrole)
+src/lib/security/            Rate limiting, audit-logging, SSRF-veilige URL-fetch
+src/lib/regulations/          Verordening ophalen (URL/tekst) + HTML-naar-tekst-extractie
 src/lib/upload/               Uploadvalidatie + .docx-tekstextractie
 src/lib/docx/                 Word-export: generieke generator (export.ts) + sjabloon-fill (fillTemplate.ts)
 src/lib/reports/              Rapport-toegang (IDOR-veilig), titel-/retentielogica
@@ -207,6 +208,19 @@ Dit is het meest kritieke onderdeel van V.E.R.A. en op meerdere niveaus afgedwon
    aantoont dat een schema met `.optional()` (in plaats van `.nullable()`) terecht wordt
    afgewezen, omdat dat OpenEI's "alle properties verplicht"-eis voor strict mode zou
    breken.
+7. **Verordening als strikt begrensde uitzondering** (`src/lib/regulations/`,
+   `Regulation` in `schema.prisma`): een organisatie kan haar gemeentelijke verordening
+   toevoegen (geplakt of via URL opgehaald, zie hoofdstuk 4 voor de SSRF-waarborgen bij dat
+   laatste) als permanente organisatieconfiguratie. Die wordt op dezelfde manier
+   gesegmenteerd als brontekst, maar met een eigen `V`-prefix (`V1-1`, `V1-2`, ...) zodat
+   casus- en verordening-citaten altijd te onderscheiden zijn. De promptinstructie
+   (`prompt.ts`, regel 9) staat een `V`-citaat uitsluitend toe als AANVULLING op een
+   professionele duiding die al op de brontekst gebaseerd is — nooit als enige
+   bronverwijzing, nooit bij een feit of verklaring, en nooit om een nieuwe duiding te
+   construeren die niet al in de brontekst staat. `findMisusedRegulationRefs()` in
+   `src/lib/validators` is de deterministische defense-in-depth hiervoor (zelfde patroon
+   als punt 4 hierboven): een statement dat deze regel toch overtreedt wordt als
+   "niet geverifieerd" gemarkeerd in plaats van stilzwijgend vertrouwd.
 
 ---
 
@@ -278,6 +292,36 @@ Dit is het meest kritieke onderdeel van V.E.R.A. en op meerdere niveaus afgedwon
 - Veilige HTTP-headers (`next.config.mjs`): Content-Security-Policy, X-Frame-Options: DENY,
   X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy en (in productie)
   Strict-Transport-Security.
+- **Rolgebaseerd** (`Role` = `MEDEWERKER` | `BEHEERDER`, `requireBeheerder()` in
+  `src/lib/auth/guard.ts`): de registrerende gebruiker wordt automatisch beheerder van de
+  organisatie. Acties die organisatiebreed gelden en/of een verhoogd risico hebben —
+  momenteel: een verordening toevoegen of verwijderen (zie hieronder) — zijn voorbehouden
+  aan beheerders; gewoon rapporten aanmaken/bewerken kan door elk organisatielid.
+
+### SSRF-bescherming bij URL-ophaling (verordening-import)
+
+Een verordening kan via een URL toegevoegd worden (`src/lib/regulations/fetchRegulationText.ts`)
+— de server haalt die pagina dan zelf op. Zonder waarborgen zou een kwaadwillend
+organisatielid de server zo kunnen laten praten met interne netwerkadressen (bv. een
+cloud-metadata-endpoint). `src/lib/security/safeFetchUrl.ts` dicht dit af:
+
+- alleen `http(s)`, nooit URL's met inloggegevens;
+- het hostname wordt zelf ge-DNS-resolved en élk teruggegeven IP-adres wordt tegen de
+  private/gereserveerde ranges gecontroleerd (RFC1918, loopback, link-local/cloud-metadata,
+  carrier-grade NAT, `::1`, `fc00::/7`, IPv4-mapped IPv6) — dit vangt ook een publieke
+  hostnaam die naar een privé-adres wijst, én alternatieve IP-notaties (de resolver zet die
+  alsnog om naar een "normaal" adres dat de check ziet);
+- redirects worden nooit automatisch gevolgd — elke hop wordt opnieuw volledig gevalideerd
+  (voorkomt dat een toegestane publieke URL doorverwijst naar een intern adres);
+- timeout (15s) en een harde cap op de gedownloade hoeveelheid (2 MB).
+
+Alleen tekst/html- en tekst/plain-responses worden geaccepteerd; de HTML wordt met een
+lichtgewicht regex-extractor omgezet naar platte tekst (`src/lib/regulations/htmlToText.ts`).
+De opgehaalde tekst wordt **eenmalig** opgeslagen, niet live herhaald bij elke AI-analyse —
+zowel voor traceerbaarheid (de geciteerde tekst moet exact overeenkomen met wat er stond op
+het moment van toevoegen) als om niet bij elke analyse opnieuw een extern verzoek te doen.
+Getest in `tests/safe-fetch-url.test.ts` (alle SSRF-afwijzingspaden die geen netwerktoegang
+vereisen) en `tests/html-to-text.test.ts`.
 
 ### AI-aanroepen
 
