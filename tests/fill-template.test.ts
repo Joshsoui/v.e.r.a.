@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Document, Packer, Paragraph, HeadingLevel, ImageRun, TextRun } from "docx";
+import { Document, Packer, Paragraph, HeadingLevel, ImageRun, TextRun, Table, TableRow, TableCell } from "docx";
 import mammoth from "mammoth";
 import JSZip from "jszip";
 import { fillDocxTemplate, TemplateFillError } from "@/lib/docx/fillTemplate";
@@ -291,5 +291,173 @@ describe("fillDocxTemplate — mengt de twee matchstrategieën nooit binnen éé
     expect(text).not.toContain("Let op");
     expect(text).toContain("Inhoud A.");
     expect(text).toContain("Inhoud B.");
+  });
+});
+
+// Nagebouwde structuur van een echt gemeentelijk intakeformulier
+// ("Onderzoeksplan Jeugd"): een Kop 1-titel, een tabel met persoonsgegevens-
+// invulvelden, een vetgedrukte sectietitel gevolgd door een tabelcel met
+// meerdere vetgedrukte vragen, en tot slot losse (niet-tabel) checkbox-/
+// handtekeningregels. Dit is precies het scenario waarvoor de
+// tabel-veilige export (findSafeSectionEnd) gebouwd is: alleen de vragen in
+// de tabelcel mogen ingevuld worden, de rest moet 100% ongewijzigd blijven.
+async function buildIntakeFormTemplate(): Promise<Buffer> {
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({ heading: HeadingLevel.HEADING_1, text: "Onderzoeksplan Test" }),
+          new Table({
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph("Naam")] }),
+                  new TableCell({ children: [new Paragraph("")] }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph("BSN")] }),
+                  new TableCell({ children: [new Paragraph("")] }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ children: [new TextRun({ text: "Hulpvraag & advies", bold: true })] }),
+          new Table({
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    children: [
+                      new Paragraph({ children: [new TextRun({ text: "Wat is de hulpvraag?", bold: true })] }),
+                      new Paragraph({
+                        children: [new TextRun({ text: "Welke problemen worden er ondervonden?", bold: true })],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph("Checkbox: akkoord ja/nee ____"),
+          new Paragraph("Handtekening: ____________"),
+        ],
+      },
+    ],
+  });
+  return Packer.toBuffer(doc);
+}
+
+function questionChapter(title: string, answerText: string): FillTemplateChapter {
+  return {
+    title,
+    status: "COMPLEET",
+    missingInfo: [],
+    statements: [
+      { id: "s1", text: answerText, category: "FEIT", sourceRefs: ["B1-1"], origin: "AI", sourceVerified: true },
+    ],
+  };
+}
+
+describe("fillDocxTemplate — tabel-veilig vullen (intakeformulier-achtig sjabloon)", () => {
+  it("vult vetgedrukte vragen binnen een tabelcel, zonder de tabelstructuur te beschadigen", async () => {
+    const template = await buildIntakeFormTemplate();
+    const buffer = await fillDocxTemplate(template, {
+      chapters: [
+        questionChapter("Wat is de hulpvraag?", "UNIEKE_TEKST_VRAAG1"),
+        questionChapter("Welke problemen worden er ondervonden?", "UNIEKE_TEKST_VRAAG2"),
+      ],
+      version: 1,
+      generatedAt: new Date(),
+      addChecklist: false,
+      addConceptFootnote: false,
+    });
+
+    // Moet een geldig, leesbaar .docx-bestand blijven (geen kapotte
+    // tabel-XML die JSZip/mammoth niet meer kan verwerken).
+    const text = await extractPlainText(buffer);
+    expect(text).toContain("UNIEKE_TEKST_VRAAG1");
+    expect(text).toContain("UNIEKE_TEKST_VRAAG2");
+  });
+
+  it("laat persoonsgegevensvelden en checkbox-/handtekeningregels 100% ongewijzigd", async () => {
+    const template = await buildIntakeFormTemplate();
+    const buffer = await fillDocxTemplate(template, {
+      chapters: [
+        questionChapter("Wat is de hulpvraag?", "UNIEKE_TEKST_VRAAG1"),
+        questionChapter("Welke problemen worden er ondervonden?", "UNIEKE_TEKST_VRAAG2"),
+      ],
+      version: 1,
+      generatedAt: new Date(),
+      addChecklist: false,
+      addConceptFootnote: false,
+    });
+
+    const origZip = await JSZip.loadAsync(template);
+    const outZip = await JSZip.loadAsync(buffer);
+    const origXml = await origZip.file("word/document.xml")!.async("string");
+    const outXml = await outZip.file("word/document.xml")!.async("string");
+
+    // Alles vóór de vetgedrukte sectietitel (incl. de persoonsgegevens-
+    // tabel) moet byte-voor-byte identiek blijven.
+    const origBefore = origXml.slice(0, origXml.indexOf("Hulpvraag"));
+    const outBefore = outXml.slice(0, outXml.indexOf("Hulpvraag"));
+    expect(outBefore).toBe(origBefore);
+
+    // Alles vanaf de checkbox-/handtekeningregel (buiten elke tabel) moet
+    // ook byte-voor-byte identiek blijven — nooit overschreven, ook al is
+    // er geen kop-grens meer ná de laatste ingevulde vraag.
+    const origAfter = origXml.slice(origXml.indexOf("Checkbox"));
+    const outAfter = outXml.slice(outXml.indexOf("Checkbox"));
+    expect(outAfter).toBe(origAfter);
+  });
+
+  it("houdt het antwoord op een vraag binnen diens eigen tabelcel (lekt niet naar een andere cel)", async () => {
+    const doc = new Document({
+      sections: [
+        {
+          children: [
+            new Table({
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [
+                        new Paragraph({ children: [new TextRun({ text: "Vraag A?", bold: true })] }),
+                      ],
+                    }),
+                    new TableCell({
+                      children: [
+                        new Paragraph({ children: [new TextRun({ text: "Vraag B?", bold: true })] }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        },
+      ],
+    });
+    const template = await Packer.toBuffer(doc);
+
+    const buffer = await fillDocxTemplate(template, {
+      chapters: [questionChapter("Vraag A?", "ANTWOORD_A"), questionChapter("Vraag B?", "ANTWOORD_B")],
+      version: 1,
+      generatedAt: new Date(),
+      addChecklist: false,
+      addConceptFootnote: false,
+    });
+
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file("word/document.xml")!.async("string");
+    // ANTWOORD_A moet vóór "Vraag B?" staan (dus in cel A, niet in cel B).
+    expect(xml.indexOf("ANTWOORD_A")).toBeLessThan(xml.indexOf("Vraag B?"));
+    expect(xml.indexOf("ANTWOORD_B")).toBeGreaterThan(xml.indexOf("Vraag B?"));
+
+    const text = await extractPlainText(buffer);
+    expect(text).toContain("ANTWOORD_A");
+    expect(text).toContain("ANTWOORD_B");
   });
 });

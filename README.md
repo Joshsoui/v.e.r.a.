@@ -72,13 +72,20 @@ haalt de Word-koppen (Kop 1/Kop 2/Kop 3) uit een geüpload .docx-bestand met `ma
 neemt het hoogste kopniveau als hoofdstukken, en slaat dat op als een nieuwe, org-eigen
 `FormatTemplate` — met generieke validator-regels (`buildGenericValidatorRules`, minimaal 1
 bewering per hoofdstuk) omdat we voor een willekeurig sjabloon geen domeinkennis hebben.
-Heeft het sjabloon geen echte kopstijlen (`extractHeadingsFromDocxWithFallback` levert dan
-minder dan 2 kopjes op), dan valt de extractie automatisch terug op paragrafen die volledig
-uit vetgedrukte tekst bestaan en er qua vorm als een titel uitzien (kort, geen afgeronde zin
-— `looksLikeHeadingText` in `src/lib/docx/headingHeuristics.ts`); de UI toont dan een melding
-dat de herkende hoofdstukstructuur gecontroleerd moet worden. Het geüploade sjabloon wordt zo
-letterlijk de structuur waarin de AI de aantekeningen opmaakt, met dezelfde
-zero-fabrication-waarborgen als elk ander format (hoofdstuk 3).
+Levert het hoogste kopniveau van de echte Word-kopstijlen minder dan 2 bruikbare hoofdstukken
+op — dus niet het RUWE aantal gevonden koppen, maar het aantal ná de top-niveau-selectie in
+`headingsToChapterDefinitions` — dan valt `extractHeadingsFromDocxWithFallback` automatisch
+terug op paragrafen die volledig uit vetgedrukte tekst bestaan en er qua vorm als een titel of
+vraag uitzien (kort, geen afgeronde mededelingszin, geen kanttekening tussen haakjes —
+`looksLikeHeadingText` in `src/lib/docx/headingHeuristics.ts`); de UI toont dan een melding dat
+de herkende hoofdstukstructuur gecontroleerd moet worden. Dat "minder dan 2 bruikbare
+hoofdstukken" is bewust ruimer dan "geen kopstijlen": een gemeentelijk intakeformulier kan best
+6 Word-koppen hebben (1x de documenttitel, 5x een sectiekop die alleen een tabel met
+invulvelden/checkboxes bevat) en toch maar 1 zinvol top-niveau-hoofdstuk opleveren — de
+eigenlijke invulbare vragen staan dan vaak niet in kopstijl, maar handmatig vetgedrukt in een
+tabelcel (zie hieronder). Het geüploade sjabloon wordt zo letterlijk de structuur waarin de AI
+de aantekeningen opmaakt, met dezelfde zero-fabrication-waarborgen als elk ander format
+(hoofdstuk 3).
 
 **Het geüploade sjabloon-bestand zelf wordt ook bewaard** (`FormatTemplate.sourceDocx`,
 permanente organisatieconfiguratie — geen dossierinhoud, dus niet onderworpen aan de
@@ -91,19 +98,48 @@ die kopstijl-matching geen enkel resultaat op (het sjabloon gebruikt geen echte 
 dan probeert `fillDocxTemplate` daarna dezelfde matching tegen paragrafen die volledig
 vetgedrukt zijn en er als titel uitzien — hetzelfde `looksLikeHeadingText`-criterium als bij
 de upload-extractie, zodat een bij upload herkend hoofdstuk hier ook echt teruggevonden
-wordt. De twee strategieën worden nooit binnen één export gemengd: zodra de kopstijl-matching
-al één match oplevert, wordt de vetgedrukte-titel-fallback niet meer geprobeerd, zodat
-incidenteel vetgedrukte tekst in een verder goed gestructureerd Kop1-sjabloon niet als
-onbedoelde extra hoofdstukgrens wordt opgevat. Alle andere onderdelen van het bestand —
-logo's/afbeeldingen, briefhoofd, lettertypen, paginamarges, kop-/voettekst — blijven volledig
-ongewijzigd, want die staan in andere delen van het zip-archief (`word/styles.xml`,
-`word/header*.xml`, `word/media/*`, …) die nooit worden aangeraakt. Het exportbestand ziet er
-zo daadwerkelijk uit als het officiële gemeentelijke document, niet als een generiek
-V.E.R.A.-document. Een hoofdstuk waarvan de titel niet teruggevonden wordt (via geen van
-beide strategieën — bv. omdat het sjabloon na het aanmaken van het format gewijzigd is) wordt
-niet stilzwijgend weggelaten, maar met een eigen kop achteraan toegevoegd. Gedeelde/geseede
-formats hebben geen eigen sjabloon-bestand (`sourceDocx` is dan `null`) en gebruiken bij
-export nog steeds de generieke generator (`src/lib/docx/export.ts`) — geen regressie voor die
+wordt. De twee strategieën worden nooit binnen één export gemengd voor het MATCHEN van
+hoofdstukken: zodra de kopstijl-matching al één match oplevert, wordt de vetgedrukte-titel-
+fallback niet meer geprobeerd, zodat incidenteel vetgedrukte tekst in een verder goed
+gestructureerd Kop1-sjabloon niet als onbedoelde extra hoofdstukgrens wordt opgevat. Alle
+andere onderdelen van het bestand — logo's/afbeeldingen, briefhoofd, lettertypen,
+paginamarges, kop-/voettekst — blijven volledig ongewijzigd, want die staan in andere delen
+van het zip-archief (`word/styles.xml`, `word/header*.xml`, `word/media/*`, …) die nooit
+worden aangeraakt. Het exportbestand ziet er zo daadwerkelijk uit als het officiële
+gemeentelijke document, niet als een generiek V.E.R.A.-document. Een hoofdstuk waarvan de
+titel niet teruggevonden wordt (via geen van beide strategieën — bv. omdat het sjabloon na het
+aanmaken van het format gewijzigd is) wordt niet stilzwijgend weggelaten, maar met een eigen
+kop achteraan toegevoegd. Gedeelde/geseede formats hebben geen eigen sjabloon-bestand
+(`sourceDocx` is dan `null`) en gebruiken bij export nog steeds de generieke generator
+(`src/lib/docx/export.ts`) — geen regressie voor die
+
+**Tabel-veilig vullen (intakeformulieren met persoonsgegevens/checkboxes).** Sommige
+gemeentelijke sjablonen zijn geen doorlopend verslag maar een gemengd formulier: tabellen met
+persoonsgegevens-invulvelden (naam, geboortedatum, BSN), checkboxes en een
+handtekeningenblok, met daartussen een paar losse vragen die wél met AI-gegenereerde lopende
+tekst beantwoord kunnen worden (vaak vetgedrukt binnen één tabelcel, bv. "Wat is de
+hulpvraag?"). Persoonsgegevens, checkboxes en het handtekeningenblok vult de AI **nooit** —
+dat blijft altijd aan de gebruiker; alleen expliciet als hoofdstuk herkende vraagparagrafen
+worden ingevuld (zie hierboven: de kop-detectie neemt zulke echte formuliersecties sowieso
+niet op als hoofdstuk). Maar zelfs los daarvan moet het vullen zelf de tabelstructuur intact
+laten, want de naïeve "vervang alles tot de volgende kop"-aanpak zou anders de sluit-tags van
+een tabel/rij/cel kunnen overschrijven (corruptie) of een hele tabel met persoonsgegevens
+kunnen wegvegen als die toevallig tussen twee herkende koppen in staat.
+`findSafeSectionEnd()` in `src/lib/docx/fillTemplate.ts` lost dit op:
+- staat de kopparagraaf zelf in een tabelcel (`<w:tc>`), dan wordt de vervanging nooit verder
+  toegepast dan het einde van díe cel — het antwoord komt dus in dezelfde cel te staan als de
+  vraag, en lekt nooit naar een buurcel of de rest van het document;
+- staat de kopparagraaf NIET in een tabel, maar zou de vervanging anders een tabel
+  overschrijven (bv. omdat er geen kop-grens meer tussen zit)? Dan wordt de vervanging
+  afgekapt vóór die tabel begint.
+Kop-GRENZEN (waar eindigt de vervangbare inhoud van een hoofdstuk) gebruiken bovendien altijd de
+echte kopstijlen als harde stop, ook wanneer de vetgedrukte-titel-strategie actief is — zodat
+bv. een echte Kop-2 als "Verklaring" een sjabloon-vraag altijd tegenhoudt, ook al gebruikt de
+matching zelf de vetgedrukte strategie. Getest met een nagebouwde intakeformulier-structuur in
+`tests/fill-template.test.ts` (incl. een test dat het antwoord op vraag A nooit in de tabelcel
+van vraag B terechtkomt) en handmatig met een echt gemeentelijk Wmo/Jeugd-intakeformulier,
+waarbij geverifieerd is dat de persoonsgegevens-tabel en het checkbox-/handtekeningenblok
+byte-voor-byte ongewijzigd blijven.
 formats.
 
 ### AIProvider-abstractie
@@ -420,15 +456,19 @@ opgegeven spec. Onderstaande keuzes/aannames zijn daarbij gemaakt:
     nu dynamisch i.p.v. statisch prerenderd), maar dat weegt niet op tegen
     een kapotte UI. Lokaal geverifieerd door de gebouwde HTML te inspecteren
     op nonce-consistentie vóór het pushen.
-15. **Sjabloon-upload herkent Word-kopstijlen, met een vetgedrukte-titel-fallback.** De
-    hoofdstukextractie uit een geüpload .docx-sjabloon (`extractHeadingsFromDocxWithFallback`
-    in `src/lib/formats/templateExtraction.ts`) leest eerst de officiële Word-kopstijlen
-    (Kop 1/Kop 2/Kop 3) uit. Levert dat minder dan 2 hoofdstukken op — het sjabloon gebruikt
-    dan waarschijnlijk geen kopstijlen, bv. alleen handmatig vetgedrukte "titels" — dan valt de
-    extractie terug op paragrafen die volledig uit vetgedrukte tekst bestaan en er qua
-    lengte/vorm als een titel uitzien (`looksLikeHeadingText`, gedeeld met de export-matching,
-    zie punt 16). De UI toont dan een melding dat de herkende structuur gecontroleerd moet
-    worden. Zijn er ook dan te weinig herkenbare titels, dan faalt de upload alsnog met een
+15. **Sjabloon-upload herkent Word-kopstijlen, met een vetgedrukte-titel-fallback (ook binnen
+    tabelcellen, voor intakeformulieren).** De hoofdstukextractie uit een geüpload
+    .docx-sjabloon (`extractHeadingsFromDocxWithFallback` in
+    `src/lib/formats/templateExtraction.ts`) leest eerst de officiële Word-kopstijlen
+    (Kop 1/Kop 2/Kop 3) uit. Levert het top-niveau daarvan minder dan 2 BRUIKBARE hoofdstukken
+    op (ná `headingsToChapterDefinitions`, dus niet het ruwe aantal gevonden koppen — een
+    intakeformulier kan prima 6 Word-koppen hebben en toch maar 1 zinvol top-niveau-hoofdstuk
+    opleveren), dan valt de extractie terug op paragrafen die volledig uit vetgedrukte tekst
+    bestaan en er qua lengte/vorm als een titel of vraag uitzien (`looksLikeHeadingText`,
+    gedeeld met de export-matching, zie punt 16) — dit werkt ook voor vetgedrukte vragen
+    bínnen een tabelcel (zie het "tabel-veilig vullen"-gedeelte in hoofdstuk 1). De UI toont
+    dan een melding dat de herkende structuur gecontroleerd moet worden. Zijn er ook dan te
+    weinig herkenbare titels, dan faalt de upload alsnog met een
     duidelijke foutmelding. Ook krijgt elk hoofdstuk uit een sjabloon generieke AI-instructies
     en generieke validator-regels (minimaal 1 bewering, geen verplichte categorie) — voor de
     seed-formats is dat domeinspecifiek uitgeschreven, voor een willekeurig geüpload sjabloon

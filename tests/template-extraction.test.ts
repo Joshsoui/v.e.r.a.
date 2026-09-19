@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Document, Packer, Paragraph, HeadingLevel, TextRun } from "docx";
+import { Document, Packer, Paragraph, HeadingLevel, TextRun, Table, TableRow, TableCell } from "docx";
 import {
   extractHeadingsFromDocx,
   extractHeadingsFromDocxWithFallback,
@@ -121,5 +121,91 @@ describe("headingsToChapterDefinitions", () => {
     const chapters = headingsToChapterDefinitions([{ level: 1, title: "Financiën" }]);
     expect(chapters[0]?.instructions.length).toBeGreaterThan(0);
     expect(chapters[0]?.requiredElements).toEqual([]);
+  });
+});
+
+// Nagebouwde structuur van een echt gemeentelijk intakeformulier
+// ("Onderzoeksplan Jeugd"): een Kop 1-titel en een aantal Kop 2-secties die
+// alleen tabellen met invulvelden bevatten (geen doorlopende tekst), plus een
+// los, vetgedrukt vraagblok met de eigenlijke invulbare vragen in een
+// tabelcel. Dit is precies het scenario dat de "te weinig bruikbare
+// hoofdstukken"-fallback moet herkennen: er zijn best 4 echte Word-koppen
+// (>=2!), maar die leveren via het top-niveau maar 1 hoofdstuk op (alleen de
+// titel) — dus moet alsnog op de vetgedrukte vragen worden teruggevallen.
+async function buildIntakeFormLikeDocx(): Promise<Buffer> {
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({ heading: HeadingLevel.HEADING_1, text: "Onderzoeksplan Test" }),
+          new Paragraph({ heading: HeadingLevel.HEADING_2, text: "Aanmelding" }),
+          new Table({
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph("Naam consulent")] }),
+                  new TableCell({ children: [new Paragraph("")] }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ children: [new TextRun({ text: "Hulpvraag & advies", bold: true })] }),
+          new Table({
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    children: [
+                      new Paragraph({ children: [new TextRun({ text: "Wat is de hulpvraag?", bold: true })] }),
+                      new Paragraph({
+                        children: [new TextRun({ text: "Welke problemen worden er ondervonden?", bold: true })],
+                      }),
+                      new Paragraph({
+                        children: [
+                          new TextRun({ text: "Kunnen de problemen opgelost worden door:", bold: true }),
+                        ],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({ children: [new TextRun({ text: "(Alleen indien van toepassing bij bezwaar)", bold: true })] }),
+          new Paragraph({ heading: HeadingLevel.HEADING_2, text: "Verklaring" }),
+          new Paragraph("Checkbox: akkoord ja/nee ____"),
+        ],
+      },
+    ],
+  });
+  return Packer.toBuffer(doc);
+}
+
+describe("extractHeadingsFromDocxWithFallback — intakeformulier-achtig sjabloon", () => {
+  it("valt terug op vetgedrukte vragen als de echte koppen maar 1 bruikbaar top-niveau-hoofdstuk opleveren", async () => {
+    const buffer = await buildIntakeFormLikeDocx();
+    const { headings, usedFallback } = await extractHeadingsFromDocxWithFallback(buffer);
+    expect(usedFallback).toBe(true);
+
+    const chapters = headingsToChapterDefinitions(headings);
+    expect(chapters.map((c) => c.title)).toEqual([
+      "Hulpvraag & advies",
+      "Wat is de hulpvraag?",
+      "Welke problemen worden er ondervonden?",
+      "Kunnen de problemen opgelost worden door:",
+    ]);
+  });
+
+  it("neemt een tussen haakjes geplaatste kanttekening niet op als hoofdstuk", async () => {
+    const buffer = await buildIntakeFormLikeDocx();
+    const { headings } = await extractHeadingsFromDocxWithFallback(buffer);
+    expect(headings.some((h) => h.title.includes("Alleen indien van toepassing bij bezwaar"))).toBe(false);
+  });
+
+  it("neemt de echte Kop 2-secties (Aanmelding, Verklaring) niet op als hoofdstuk", async () => {
+    const buffer = await buildIntakeFormLikeDocx();
+    const { headings } = await extractHeadingsFromDocxWithFallback(buffer);
+    expect(headings.some((h) => h.title === "Aanmelding")).toBe(false);
+    expect(headings.some((h) => h.title === "Verklaring")).toBe(false);
   });
 });

@@ -72,12 +72,24 @@ export async function extractBoldParagraphHeadings(buffer: Buffer): Promise<Extr
 /**
  * Probeert eerst echte Word-kopstijlen; valt terug op vetgedrukte paragrafen
  * als dat te weinig oplevert om een bruikbare hoofdstukstructuur te vormen.
+ *
+ * Belangrijk: "te weinig oplevert" wordt beoordeeld op het aantal
+ * BRUIKBARE (top-niveau) hoofdstukken ná headingsToChapterDefinitions(), niet
+ * op het ruwe aantal gevonden koppen. Een document kan best 6 Word-koppen
+ * hebben (1x Kop 1 als documenttitel, 5x Kop 2 als sectiekopjes van een
+ * formulier) en daarmee toch maar 1 bruikbaar top-niveau-hoofdstuk opleveren
+ * (alleen de titel) — precies het scenario bij een intakeformulier waarvan de
+ * eigenlijke invulbare vragen niet in Kop-stijl staan, maar handmatig
+ * vetgedrukt zijn (vaak binnen een tabelcel). Zie fillTemplate.ts voor hoe
+ * zo'n in-tabelcel-kop bij export veilig (zonder de tabel te beschadigen)
+ * ingevuld wordt.
  */
 export async function extractHeadingsFromDocxWithFallback(
   buffer: Buffer,
 ): Promise<{ headings: ExtractedHeading[]; usedFallback: boolean }> {
   const realHeadings = await extractHeadingsFromDocx(buffer);
-  if (realHeadings.length >= 2) {
+  const realChapterCount = headingsToChapterDefinitions(realHeadings).length;
+  if (realChapterCount >= 2) {
     return { headings: realHeadings, usedFallback: false };
   }
   const boldHeadings = await extractBoldParagraphHeadings(buffer);

@@ -12,9 +12,15 @@
 export function looksLikeHeadingText(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.length === 0 || trimmed.length > 90) return false;
-  // Een kop is een korte titel, geen afgeronde zin.
-  if (/[.,;:]$/.test(trimmed)) return false;
+  // Een kop is een korte titel of vraag, geen afgeronde mededelingszin.
+  // ":" telt hier NIET als zinseinde — een kop/vraag-label eindigt vaak juist
+  // op ":" (bv. "Kunnen de problemen opgelost worden door:").
+  if (/[.,;]$/.test(trimmed)) return false;
   // Losse nummering (bv. een paginanummer of lijstmarkering) is geen kop.
   if (/^\d+$/.test(trimmed)) return false;
+  // Een tussen haakjes geplaatste toelichting/kanttekening (bv. "(Alleen
+  // indien van toepassing bij bezwaar)") is een instructie aan de lezer,
+  // geen invulbare kop of vraag.
+  if (/^[([]/.test(trimmed)) return false;
   return true;
 }

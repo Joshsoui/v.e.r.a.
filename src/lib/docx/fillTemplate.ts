@@ -273,6 +273,89 @@ function matchChaptersToHeadings(
   });
 }
 
+// `end` is de positie NA de volledige sluit-tag (dus inclusief `</w:tc>`
+// zelf) — handig om te bepalen of een positie "binnen" het element valt.
+// `contentEnd` is de positie VLAK VOOR de sluit-tag begint — dát is de
+// grens die een vervanging nooit voorbij mag gaan, anders wordt de sluit-tag
+// zelf mee overschreven en raakt de tabel/cel-structuur corrupt.
+type TagSpan = { start: number; end: number; contentEnd: number };
+
+/**
+ * Vindt alle spans van een balanced element (bv. <w:tc>...</w:tc>) via een
+ * stack-gebaseerde scan — nodig om te weten waar een tabelcel/tabel exact
+ * begint en eindigt, zodat het vullen van een hoofdstuk nooit half een
+ * tabelcel/tabel kan overschrijven (zie findSafeSectionEnd).
+ * `\b` na de tagnaam voorkomt dat dit ook op bv. <w:tcPr> matcht.
+ */
+function findTagSpans(xml: string, tagName: string): TagSpan[] {
+  const tagRe = new RegExp(`<w:${tagName}\\b[^>]*>|</w:${tagName}>`, "g");
+  const closeTag = `</w:${tagName}>`;
+  const spans: TagSpan[] = [];
+  const openStack: number[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = tagRe.exec(xml)) !== null) {
+    if (match[0] === closeTag) {
+      const openStart = openStack.pop();
+      if (openStart !== undefined) {
+        spans.push({ start: openStart, contentEnd: match.index, end: match.index + closeTag.length });
+      }
+    } else {
+      openStack.push(match.index);
+    }
+  }
+  return spans;
+}
+
+/** Kleinste span uit `spans` die `position` bevat, of null als die er geen is. */
+function findEnclosingSpan(spans: TagSpan[], position: number): TagSpan | null {
+  let best: TagSpan | null = null;
+  for (const span of spans) {
+    if (span.start <= position && position < span.end) {
+      if (!best || span.end - span.start < best.end - best.start) best = span;
+    }
+  }
+  return best;
+}
+
+/**
+ * Bepaalt tot waar de inhoud van een hoofdstuk veilig vervangen mag worden,
+ * gegeven een naief berekend eindpunt (de eerstvolgende kopparagraaf, of het
+ * einde van de body). Nodig omdat sommige sjablonen (bv. een intakeformulier
+ * met tabellen/invulvelden/checkboxes tussen de invulbare koppen in) niet
+ * uitsluitend uit doorlopende tekst tussen koppen bestaan:
+ * - Staat de kopparagraaf zélf binnen een tabelcel (bv. een vetgedrukte
+ *   vraag als "Wat is de hulpvraag?" in een formuliertabel)? Dan mag de
+ *   vervanging nooit verder gaan dan het einde van díe cel — anders zou de
+ *   afsluitende tags van de tabel/rij/cel worden overschreven, wat het
+ *   .docx-bestand corrumpeert en/of andere tabelcellen (persoonsgegevens,
+ *   checkboxes) zou aantasten.
+ * - Staat de kopparagraaf NIET in een tabel, maar zou de vervanging het
+ *   begin van een tabel overschrijven vóór het naïeve eindpunt? Dan wordt de
+ *   vervanging afgekapt vóór die tabel begint — zo blijft elke tabel
+ *   (persoonsgegevensvelden, checkboxes, handtekeningenblok) altijd volledig
+ *   buiten het te vervangen bereik, ongeacht of er nog een kop-grens tussen
+ *   zit.
+ */
+function findSafeSectionEnd(
+  headingPara: ParaInfo,
+  naiveEnd: number,
+  tcSpans: TagSpan[],
+  tblSpans: TagSpan[],
+): number {
+  const enclosingCell = findEnclosingSpan(tcSpans, headingPara.start);
+  if (enclosingCell) {
+    return Math.min(naiveEnd, enclosingCell.contentEnd);
+  }
+
+  let end = naiveEnd;
+  for (const tbl of tblSpans) {
+    if (tbl.start >= headingPara.end && tbl.start < end) {
+      end = tbl.start;
+    }
+  }
+  return end;
+}
+
 function findBodyContentEnd(documentXml: string): number {
   const bodyCloseIdx = documentXml.indexOf("</w:body>");
   if (bodyCloseIdx === -1) {
@@ -322,26 +405,28 @@ export async function fillDocxTemplate(templateBuffer: Buffer, input: FillTempla
     .map((p, i) => (p.styleId && headingStyleIdSet.has(p.styleId) ? i : -1))
     .filter((i) => i >= 0);
 
-  let headingParaIndexes = styleHeadingParaIndexes;
   let matchedParaIndexByChapter =
     styleHeadingParaIndexes.length > 0
       ? matchChaptersToHeadings(paras, styleHeadingParaIndexes, input.chapters)
       : input.chapters.map(() => null);
 
   // Strategie 2 (fallback): sjablonen zonder echte kopstijlen, maar met
-  // handmatig vetgedrukte "titel"-paragrafen. Wordt alleen geprobeerd als
-  // strategie 1 geen enkele match opleverde — de twee strategieën worden
-  // nooit binnen één vulling gemengd, zodat incidenteel vetgedrukte tekst in
-  // een verder goed gestructureerd Kop1-sjabloon niet als extra (onbedoelde)
+  // handmatig vetgedrukte "titel"/"vraag"-paragrafen (ook binnen een
+  // tabelcel, bv. een intakeformulier — zie findSafeSectionEnd hieronder).
+  // Wordt alleen geprobeerd als strategie 1 geen enkele match opleverde — de
+  // twee strategieën worden nooit binnen één vulling gemengd voor het
+  // MATCHEN van hoofdstukken, zodat incidenteel vetgedrukte tekst in een
+  // verder goed gestructureerd Kop1-sjabloon niet als extra (onbedoelde)
   // hoofdstukgrens wordt opgevat.
+  const boldHeadingParaIndexes = paras
+    .map((p, i) => (p.isFullyBold && looksLikeHeadingText(p.text) ? i : -1))
+    .filter((i) => i >= 0);
+  let usingBoldStrategy = false;
   if (matchedParaIndexByChapter.every((i) => i === null)) {
-    const boldHeadingParaIndexes = paras
-      .map((p, i) => (p.isFullyBold && looksLikeHeadingText(p.text) ? i : -1))
-      .filter((i) => i >= 0);
     const boldMatches = matchChaptersToHeadings(paras, boldHeadingParaIndexes, input.chapters);
     if (boldMatches.some((i) => i !== null)) {
-      headingParaIndexes = boldHeadingParaIndexes;
       matchedParaIndexByChapter = boldMatches;
+      usingBoldStrategy = true;
     }
   }
 
@@ -351,16 +436,33 @@ export async function fillDocxTemplate(templateBuffer: Buffer, input: FillTempla
     );
   }
 
-  // Vervang, voor elke gematchte kop, alles tot de eerstvolgende kop door de
-  // gegenereerde hoofdstukinhoud. In omgekeerde documentvolgorde toepassen
+  // Voor het bepalen van kop-GRENZEN (waar eindigt de vervangbare inhoud van
+  // een hoofdstuk) tellen echte kopstijlen ALTIJD mee, ook wanneer strategie 2
+  // actief is — een echte Kop-2 als "Verklaring" moet een hoofdstuk uit
+  // strategie 2 altijd tegenhouden. Vetgedrukte kandidaten tellen alleen mee
+  // als grens wanneer strategie 2 ook daadwerkelijk het actieve matchpatroon
+  // is: draait het sjabloon gewoon op echte kopstijlen (strategie 1), dan mag
+  // incidenteel vetgedrukte tekst (bv. "Let op") nog steeds gewoon bij de
+  // vervangen sectie-inhoud horen, exact zoals bij het matchen hierboven.
+  const allBoundaryIndexes = Array.from(
+    new Set([...styleHeadingParaIndexes, ...(usingBoldStrategy ? boldHeadingParaIndexes : [])]),
+  ).sort((a, b) => a - b);
+  const tcSpans = findTagSpans(documentXml, "tc");
+  const tblSpans = findTagSpans(documentXml, "tbl");
+
+  // Vervang, voor elke gematchte kop, alles tot de eerstvolgende kop-grens
+  // door de gegenereerde hoofdstukinhoud — begrensd door findSafeSectionEnd
+  // zodat een tabel (persoonsgegevens, checkboxes, handtekeningenblok) nooit
+  // half overschreven kan worden. In omgekeerde documentvolgorde toepassen
   // zodat eerdere offsets geldig blijven.
   const ranges: { start: number; end: number; xml: string }[] = [];
   matchedParaIndexByChapter.forEach((paraIdx, chapterIdx) => {
     if (paraIdx === null) return;
     const headingPara = paras[paraIdx]!;
-    const nextHeadingParaIdx = headingParaIndexes.find((i) => i > paraIdx);
-    const sectionEnd =
-      nextHeadingParaIdx !== undefined ? paras[nextHeadingParaIdx]!.start : findBodyContentEnd(documentXml);
+    const nextBoundaryParaIdx = allBoundaryIndexes.find((i) => i > paraIdx);
+    const naiveEnd =
+      nextBoundaryParaIdx !== undefined ? paras[nextBoundaryParaIdx]!.start : findBodyContentEnd(documentXml);
+    const sectionEnd = findSafeSectionEnd(headingPara, naiveEnd, tcSpans, tblSpans);
     ranges.push({
       start: headingPara.end,
       end: sectionEnd,
