@@ -33,12 +33,32 @@ export function StepBronnen({
   onUploadText,
   onDeleteSource,
   onAdvance,
+  uploadAudioFile,
+  pendingAudioFile,
+  audioBusy,
+  audioError,
+  downloadedPending,
+  onRetryPendingAudio,
+  onDownloadPendingAudio,
+  onDiscardPendingAudio,
 }: {
   report: ReportDetail;
   onUploadFiles: (files: FileList) => Promise<void>;
   onUploadText: (text: string, filename: string) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   onAdvance: () => Promise<void>;
+  // Deze zeven props leven bewust in de ouder (ReportWizard), niet hier —
+  // StepBronnen wordt volledig unmount/remount bij het wisselen van stap, dus
+  // een nog niet verwerkte opname zou anders stilzwijgend verloren gaan
+  // zodra de gebruiker even naar een andere stap navigeert.
+  uploadAudioFile: (file: File) => Promise<void>;
+  pendingAudioFile: File | null;
+  audioBusy: boolean;
+  audioError: string | null;
+  downloadedPending: boolean;
+  onRetryPendingAudio: () => void;
+  onDownloadPendingAudio: () => void;
+  onDiscardPendingAudio: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
@@ -47,13 +67,16 @@ export function StepBronnen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [audioBusy, setAudioBusy] = useState(false);
-  const [audioError, setAudioError] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordingStreamRef = useRef<MediaStream | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
+  // Alleen voor fouten bij het STARTEN van een opname (geen microfoon-
+  // ondersteuning/toestemming) — hoeft niet in de ouder te leven, want zonder
+  // geslaagde opname is er niets om bij stapwisseling te verliezen.
+  const [recordingStartError, setRecordingStartError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!recording) return;
@@ -66,6 +89,19 @@ export function StepBronnen({
   useEffect(() => {
     return () => {
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsOnline(navigator.onLine);
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
     };
   }, []);
 
@@ -88,24 +124,6 @@ export function StepBronnen({
     }
   }
 
-  async function uploadAudioFile(file: File) {
-    setAudioBusy(true);
-    setAudioError(null);
-    try {
-      // onUploadFiles verwacht een FileList; DataTransfer is de standaard
-      // manier om er client-side eentje te bouwen zonder een echte
-      // <input>-selectie, zodat een opname exact hetzelfde upload-pad
-      // volgt als een handmatig geselecteerd bestand.
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      await onUploadFiles(dt.files);
-    } catch (err) {
-      setAudioError(err instanceof Error ? err.message : "Transcriberen mislukt.");
-    } finally {
-      setAudioBusy(false);
-    }
-  }
-
   async function handleAudioFileChange() {
     const files = audioInputRef.current?.files;
     if (!files || files.length === 0) return;
@@ -114,17 +132,21 @@ export function StepBronnen({
   }
 
   async function startRecording() {
-    setAudioError(null);
+    setRecordingStartError(null);
     const mimeType = pickSupportedMimeType();
     if (!mimeType) {
-      setAudioError("Opnemen in de browser wordt hier niet ondersteund. Upload een bestaande opname in plaats daarvan.");
+      setRecordingStartError(
+        "Opnemen in de browser wordt hier niet ondersteund. Upload een bestaande opname in plaats daarvan.",
+      );
       return;
     }
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      setAudioError("Kon geen toegang krijgen tot de microfoon. Controleer de microfoon-toestemming van deze browser.");
+      setRecordingStartError(
+        "Kon geen toegang krijgen tot de microfoon. Controleer de microfoon-toestemming van deze browser.",
+      );
       return;
     }
 
@@ -217,29 +239,61 @@ export function StepBronnen({
           de audio zelf wordt nooit opgeslagen. Zorg dat betrokkenen weten dat het gesprek wordt
           opgenomen.
         </p>
+        {!isOnline && (
+          <Alert variant="warning">
+            Geen internetverbinding. Opnemen werkt gewoon offline, maar verwerken tot tekst lukt
+            pas zodra je weer online bent.
+          </Alert>
+        )}
         {audioError && <Alert variant="error">{audioError}</Alert>}
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            id="audioUpload"
-            ref={audioInputRef}
-            type="file"
-            accept="audio/*"
-            disabled={audioBusy || recording}
-            onChange={handleAudioFileChange}
-            className="block text-sm text-gray-600 file:mr-4 file:rounded-md file:border-0 file:bg-vera-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-vera-700 hover:file:bg-vera-100"
-          />
-          <span className="text-xs text-gray-400">of</span>
-          {recording ? (
-            <Button variant="danger" onClick={stopRecording} className="flex items-center gap-2">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
-              Stop opname ({formatDuration(recordingSeconds)})
-            </Button>
-          ) : (
-            <Button variant="secondary" disabled={audioBusy} onClick={startRecording}>
-              🎙️ Opname starten
-            </Button>
-          )}
-        </div>
+
+        {pendingAudioFile ? (
+          <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs text-amber-800">
+              De opname &quot;{pendingAudioFile.name}&quot; is nog niet verwerkt en is bewust bewaard zodat
+              hij niet verloren gaat — probeer opnieuw zodra je weer verbinding hebt, of download
+              hem naar dit apparaat.
+              {downloadedPending && " Gedownload naar dit apparaat."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" disabled={audioBusy} onClick={onRetryPendingAudio} className="text-xs">
+                {audioBusy ? "Bezig..." : "Probeer opnieuw"}
+              </Button>
+              <Button variant="ghost" onClick={onDownloadPendingAudio} className="text-xs">
+                Download naar dit apparaat
+              </Button>
+              <Button variant="ghost" disabled={audioBusy} onClick={onDiscardPendingAudio} className="text-xs text-red-600">
+                Weggooien
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recordingStartError && <Alert variant="error">{recordingStartError}</Alert>}
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                id="audioUpload"
+                ref={audioInputRef}
+                type="file"
+                accept="audio/*"
+                disabled={audioBusy || recording}
+                onChange={handleAudioFileChange}
+                className="block text-sm text-gray-600 file:mr-4 file:rounded-md file:border-0 file:bg-vera-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-vera-700 hover:file:bg-vera-100"
+              />
+              <span className="text-xs text-gray-400">of</span>
+              {recording ? (
+                <Button variant="danger" onClick={stopRecording} className="flex items-center gap-2">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                  Stop opname ({formatDuration(recordingSeconds)})
+                </Button>
+              ) : (
+                <Button variant="secondary" disabled={audioBusy} onClick={startRecording}>
+                  🎙️ Opname starten
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
         {audioBusy && <p className="text-xs text-gray-500">Bezig met transcriberen — dit kan even duren...</p>}
       </div>
 

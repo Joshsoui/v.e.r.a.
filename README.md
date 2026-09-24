@@ -332,6 +332,22 @@ waarborgen zijn bewust strikt:
   toestemming van de betrokkene(n) — dat is een gespreks-/procesverantwoordelijkheid van de
   consulent zelf, de tool kan dat niet controleren of afdwingen. De upload-UI toont hier
   wel een korte herinnering bij.
+- **Offline-robuustheid**: omdat de audio zelf nergens tussentijds wordt opgeslagen, zou een
+  mislukte transcriptie-upload (geen internet, een netwerkstoring) een hele opname
+  onherstelbaar kwijt kunnen raken — meteen na het stoppen van de opname, precies het
+  moment waarop opnieuw opnemen vaak niet meer kan. Daarom houdt `ReportWizard.tsx` de
+  opgenomen/geüploade `File` bewust in het geheugen vast zolang de upload niet gelukt is
+  (`pendingAudioFile`-state, bewust op ouder-niveau i.p.v. in `StepBronnen.tsx` zelf, want
+  die laatste wordt volledig unmount/remount bij het wisselen van stap): de gebruiker kan
+  "Probeer opnieuw" klikken zodra er weer verbinding is, zonder opnieuw te hoeven opnemen,
+  of het bestand lokaal downloaden als fallback (`downloadPendingAudio()`) om het later via
+  de gewone bestand-upload alsnog toe te voegen. Een online/offline-indicator
+  (`navigator.onLine` + de `online`/`offline`-events) in `StepBronnen.tsx` waarschuwt al
+  vóór het opnemen als er geen verbinding is. Zolang de opname pending is en de gebruiker
+  naar een andere stap navigeert, toont `ReportWizard.tsx` een korte banner die verwijst
+  terug naar stap 2. Dit alles overleeft alleen stapwisselingen binnen dezelfde
+  paginasessie — een volledige paginaherlaad verliest de pending opname alsnog, opnieuw
+  omdat audio bewust nooit ergens (ook niet tijdelijk) wordt opgeslagen.
 
 ### Auth & autorisatie
 
@@ -727,7 +743,10 @@ van een softwareoplevering vallen:
   bronverwijzingen met "terug naar AI-versie" tijdens de controle-stap, en een optioneel
   eigen-referentieveld om rapporten in het dashboard uit elkaar te houden.
 - Gespreksopnames als bron: uploaden of live opnemen in de browser, automatisch
-  getranscribeerd — alleen het transcript wordt bewaard, de audio zelf nooit.
+  getranscribeerd — alleen het transcript wordt bewaard, de audio zelf nooit. Offline-robuust:
+  een mislukte upload wordt vastgehouden voor een nieuwe poging of lokale download, met een
+  online/offline-indicator vooraf en een waarschuwing bij het wegnavigeren met een nog niet
+  verwerkte opname.
 - 5 geseede vakgebieden (Jeugd, Wmo, Participatie, Schuldhulpverlening, Leerplicht), elk met
   een eigen standaardformat, plus sjabloon-upload waarmee een organisatie een eigen
   .docx-sjabloon kan uploaden dat automatisch een nieuw, org-eigen format wordt — en bij

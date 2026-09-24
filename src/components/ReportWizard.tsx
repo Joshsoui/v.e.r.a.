@@ -19,6 +19,18 @@ export function ReportWizard({ reportId }: { reportId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
+  // Op ReportWizard-niveau (niet in StepBronnen zelf) bijgehouden: StepBronnen
+  // wordt volledig unmount/remount bij het wisselen van stap ({activeStep === 2
+  // && <StepBronnen .../>}), dus lokale state daar zou een nog niet verwerkte
+  // opname stilzwijgend kwijtraken zodra de gebruiker even naar een andere
+  // stap navigeert. Hier overleeft het stapwisselingen — pas een volledige
+  // paginaherlaad verliest 'm nog (audio wordt bewust nooit ergens
+  // opgeslagen, ook niet tijdelijk op de server).
+  const [pendingAudioFile, setPendingAudioFile] = useState<File | null>(null);
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [downloadedPending, setDownloadedPending] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const data = await apiJson<{ report: ReportDetail }>(`/api/reports/${reportId}`);
@@ -99,6 +111,46 @@ export function ReportWizard({ reportId }: { reportId: string }) {
     await load();
   }
 
+  async function uploadAudioFile(file: File) {
+    setAudioBusy(true);
+    setAudioError(null);
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      await handleUploadFiles(dt.files);
+      setPendingAudioFile(null);
+      setDownloadedPending(false);
+    } catch (err) {
+      setAudioError(err instanceof Error ? err.message : "Transcriberen mislukt.");
+      setPendingAudioFile(file);
+    } finally {
+      setAudioBusy(false);
+    }
+  }
+
+  function retryPendingAudio() {
+    if (pendingAudioFile) void uploadAudioFile(pendingAudioFile);
+  }
+
+  function downloadPendingAudio() {
+    if (!pendingAudioFile) return;
+    const url = URL.createObjectURL(pendingAudioFile);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = pendingAudioFile.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setDownloadedPending(true);
+  }
+
+  function discardPendingAudio() {
+    setPendingAudioFile(null);
+    setDownloadedPending(false);
+    setAudioError(null);
+  }
+
   async function handleUploadText(text: string, filename: string) {
     const formData = new FormData();
     formData.append("text", text);
@@ -175,6 +227,15 @@ export function ReportWizard({ reportId }: { reportId: string }) {
         {report.reference ? `${report.title} — ${report.formatTemplate.name}` : report.formatTemplate.name}
       </p>
 
+      {pendingAudioFile && activeStep !== 2 && (
+        <div className="mb-4">
+          <Alert variant="warning">
+            Er staat nog een niet-verwerkte gespreksopname klaar (&quot;{pendingAudioFile.name}&quot;) — ga
+            naar stap 2 (Broninformatie) om het opnieuw te proberen of te downloaden.
+          </Alert>
+        </div>
+      )}
+
       <StepIndicator activeStep={activeStep} maxReachedStep={report.currentStep} onSelect={setActiveStep} />
 
       {activeStep === 1 && <StepInstellingen report={report} onSave={handleSettingsSave} />}
@@ -185,6 +246,14 @@ export function ReportWizard({ reportId }: { reportId: string }) {
           onUploadText={handleUploadText}
           onDeleteSource={handleDeleteSource}
           onAdvance={handleAdvanceFromSources}
+          uploadAudioFile={uploadAudioFile}
+          pendingAudioFile={pendingAudioFile}
+          audioBusy={audioBusy}
+          audioError={audioError}
+          downloadedPending={downloadedPending}
+          onRetryPendingAudio={retryPendingAudio}
+          onDownloadPendingAudio={downloadPendingAudio}
+          onDiscardPendingAudio={discardPendingAudio}
         />
       )}
       {activeStep === 3 && <StepAnalyse report={report} onAnalyze={handleAnalyze} />}
