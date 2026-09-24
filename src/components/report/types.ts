@@ -14,7 +14,7 @@ export type WritingStyle = { key: string; label: string; description: string };
 export type SourceDoc = {
   id: string;
   filename: string;
-  sourceType: "TEKST" | "DOCX";
+  sourceType: "TEKST" | "DOCX" | "AUDIO";
   charCount: number;
   createdAt: string;
 };

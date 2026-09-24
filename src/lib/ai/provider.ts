@@ -12,6 +12,12 @@ export type AnalyzeReportInput = {
   regulationSegments?: SourceSegment[];
 };
 
+export type TranscribeAudioInput = {
+  buffer: Buffer;
+  filename: string;
+  mimeType: string;
+};
+
 /**
  * Abstractielaag voor LLM-aanbieders. Alles in de rest van de applicatie
  * praat tegen deze interface — nooit rechtstreeks tegen een specifieke
@@ -21,4 +27,10 @@ export type AnalyzeReportInput = {
  */
 export interface AIProvider {
   analyzeReport(input: AnalyzeReportInput): Promise<ReportAnalysis>;
+  /**
+   * Zet een gespreksopname om in platte tekst. De aanroeper geeft alleen de
+   * ruwe bytes door (in-memory, nooit weggeschreven) en krijgt uitsluitend
+   * het transcript terug — de audio zelf wordt door deze laag niet bewaard.
+   */
+  transcribeAudio(input: TranscribeAudioInput): Promise<string>;
 }

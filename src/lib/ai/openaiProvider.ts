@@ -1,6 +1,6 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { env } from "@/lib/env";
-import type { AIProvider, AnalyzeReportInput } from "@/lib/ai/provider";
+import type { AIProvider, AnalyzeReportInput, TranscribeAudioInput } from "@/lib/ai/provider";
 import {
   buildReportAnalysisSchemaForChapters,
   toStrictJsonSchema,
@@ -86,5 +86,40 @@ export class OpenAIProvider implements AIProvider {
     }
 
     return result.data;
+  }
+
+  /**
+   * Transcribeert een gespreksopname naar platte tekst. De audio zelf
+   * bestaat alleen als `Buffer` in het geheugen van deze aanroep — er wordt
+   * hier niets naar schijf of database geschreven, en na deze functie is
+   * de buffer verder niet meer bereikbaar. Zie ook TranscribeAudioInput.
+   */
+  async transcribeAudio(input: TranscribeAudioInput): Promise<string> {
+    let file: Awaited<ReturnType<typeof toFile>>;
+    try {
+      file = await toFile(input.buffer, input.filename, { type: input.mimeType });
+    } catch (err) {
+      console.error("Kon audio-opname niet voorbereiden voor transcriptie:", err);
+      throw new ApiError(400, "Kon de audio-opname niet verwerken — is het bestand niet beschadigd?");
+    }
+
+    let response;
+    try {
+      response = await this.client.audio.transcriptions.create(
+        { file, model: env.openaiTranscribeModel },
+        { timeout: env.openaiTimeoutMs },
+      );
+    } catch (err) {
+      console.error("OpenAI-transcriptie mislukt:", err);
+      throw new ApiError(502, "De transcriptie van de gespreksopname is mislukt. Probeer het later opnieuw.", {
+        cause: err,
+      });
+    }
+
+    const text = response.text?.trim();
+    if (!text) {
+      throw new ApiError(502, "De transcriptie leverde geen tekst op — bevat de opname wel gesproken tekst?");
+    }
+    return text;
   }
 }

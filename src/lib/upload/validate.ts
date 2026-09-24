@@ -34,6 +34,46 @@ export function assertValidUploadFile(file: { size: number; type: string; name: 
   }
 }
 
+// Formaten die zowel de browser-`MediaRecorder` (live opname) als een
+// gebruiker die een bestaand bestand uploadt kunnen aanleveren, en die
+// OpenAI's transcriptie-API zelf ook ondersteunt.
+const AUDIO_EXTENSIONS = [".webm", ".m4a", ".mp3", ".mp4", ".mpeg", ".mpga", ".oga", ".ogg", ".wav", ".flac"];
+const ALLOWED_AUDIO_MIME_TYPES = new Set([
+  "audio/webm",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/mp3",
+  "audio/mpeg",
+  "audio/mpga",
+  "audio/ogg",
+  "audio/oga",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/flac",
+  "video/webm", // MediaRecorder levert audio-only opnames soms als video/webm aan
+]);
+
+export function isAudioUpload(file: { type: string; name: string }): boolean {
+  const lowerName = file.name.toLowerCase();
+  return ALLOWED_AUDIO_MIME_TYPES.has(file.type) || AUDIO_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+}
+
+export function assertValidAudioFile(file: { size: number; type: string; name: string }) {
+  if (file.size > env.maxAudioFileSizeBytes) {
+    throw new UploadValidationException(
+      "FILE_TOO_LARGE",
+      `Audiobestand "${file.name}" is te groot (max. ${Math.round(env.maxAudioFileSizeBytes / 1_000_000)} MB).`,
+    );
+  }
+  if (!isAudioUpload(file)) {
+    throw new UploadValidationException(
+      "UNSUPPORTED_TYPE",
+      `Bestandstype van "${file.name}" wordt niet als audio herkend.`,
+    );
+  }
+}
+
 export function assertWithinFileCount(currentCount: number, addingCount: number) {
   if (currentCount + addingCount > env.maxSourceFilesPerReport) {
     throw new UploadValidationException(

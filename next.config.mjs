@@ -13,8 +13,12 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
+    // microphone=(self): nodig voor de live-opname-functie bij broninformatie
+    // (StepBronnen.tsx, MediaRecorder) — alleen dit origin mag de
+    // microfoon-toestemming van de browser aanvragen, geen enkel ander/
+    // ingesloten origin. Camera/geolocation blijven ongebruikt en dus dicht.
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+    value: "camera=(), microphone=(self), geolocation=(), interest-cohort=()",
   },
   { key: "X-DNS-Prefetch-Control", value: "off" },
 ];

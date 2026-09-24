@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   assertValidUploadFile,
+  assertValidAudioFile,
+  isAudioUpload,
   assertWithinFileCount,
   assertNonEmptyText,
   assertTotalInputWithinLimit,
@@ -11,6 +13,7 @@ const originalEnv = { ...process.env };
 
 beforeEach(() => {
   process.env.MAX_UPLOAD_FILE_SIZE_BYTES = "1000";
+  process.env.MAX_AUDIO_FILE_SIZE_BYTES = "2000";
   process.env.MAX_SOURCE_FILES_PER_REPORT = "3";
   process.env.MAX_TOTAL_INPUT_CHARS = "500";
 });
@@ -40,6 +43,44 @@ describe("assertValidUploadFile", () => {
     expect(() =>
       assertValidUploadFile({ size: 100, type: "application/pdf", name: "bestand.pdf" }),
     ).toThrow(UploadValidationException);
+  });
+});
+
+describe("isAudioUpload", () => {
+  it("herkent audio op mime-type", () => {
+    expect(isAudioUpload({ type: "audio/webm", name: "opname" })).toBe(true);
+    expect(isAudioUpload({ type: "audio/mpeg", name: "gesprek" })).toBe(true);
+  });
+
+  it("herkent audio op bestandsextensie als het mime-type ontbreekt/generiek is", () => {
+    expect(isAudioUpload({ type: "", name: "gesprek.m4a" })).toBe(true);
+    expect(isAudioUpload({ type: "application/octet-stream", name: "opname.wav" })).toBe(true);
+  });
+
+  it("herkent video/webm ook als audio (MediaRecorder levert audio-only opnames soms zo aan)", () => {
+    expect(isAudioUpload({ type: "video/webm", name: "opname.webm" })).toBe(true);
+  });
+
+  it("herkent een .docx-bestand niet als audio", () => {
+    expect(isAudioUpload({ type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", name: "notities.docx" })).toBe(false);
+  });
+});
+
+describe("assertValidAudioFile", () => {
+  it("accepteert een geldig audiobestand binnen de groottelimiet", () => {
+    expect(() => assertValidAudioFile({ size: 1500, type: "audio/webm", name: "opname.webm" })).not.toThrow();
+  });
+
+  it("weigert een te groot audiobestand", () => {
+    expect(() => assertValidAudioFile({ size: 5000, type: "audio/webm", name: "groot.webm" })).toThrow(
+      UploadValidationException,
+    );
+  });
+
+  it("weigert een niet-audio bestandstype", () => {
+    expect(() => assertValidAudioFile({ size: 100, type: "application/pdf", name: "bestand.pdf" })).toThrow(
+      UploadValidationException,
+    );
   });
 });
 

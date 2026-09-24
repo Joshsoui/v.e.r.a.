@@ -44,6 +44,12 @@ export const env = {
   get openaiTimeoutMs() {
     return intOr("OPENAI_TIMEOUT_MS", 45_000);
   },
+  /// Transcriptiemodel is bewust configureerbaar los van OPENAI_MODEL: een
+  /// audio-naar-tekst-model (bv. gpt-4o-transcribe/whisper-1) is een ander
+  /// soort model dan het tekstmodel voor de VERA-analyse.
+  get openaiTranscribeModel() {
+    return optional("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-transcribe");
+  },
   get appBaseUrl() {
     return (
       process.env.APP_BASE_URL ||
@@ -68,11 +74,23 @@ export const env = {
   get maxUploadFileSizeBytes() {
     return intOr("MAX_UPLOAD_FILE_SIZE_BYTES", 5_000_000);
   },
+  /// Losse, ruimere limiet voor audio-uploads/-opnames: audiobestanden zijn
+  /// van nature veel groter dan tekst/.docx, en OpenAI's transcriptie-API
+  /// accepteert zelf ook maximaal 25 MB per bestand.
+  get maxAudioFileSizeBytes() {
+    return intOr("MAX_AUDIO_FILE_SIZE_BYTES", 25_000_000);
+  },
   get maxSourceFilesPerReport() {
     return intOr("MAX_SOURCE_FILES_PER_REPORT", 10);
   },
   get maxTotalInputChars() {
     return intOr("MAX_TOTAL_INPUT_CHARS", 60_000);
+  },
+  get rateLimitTranscribeMax() {
+    return intOr("RATE_LIMIT_TRANSCRIBE_MAX", 15);
+  },
+  get rateLimitTranscribeWindowMs() {
+    return intOr("RATE_LIMIT_TRANSCRIBE_WINDOW_MS", 3_600_000);
   },
   get reportRetentionDays() {
     return intOr("REPORT_RETENTION_DAYS", 30);

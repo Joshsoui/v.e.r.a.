@@ -48,6 +48,13 @@ enum ReportStatus {
 enum SourceType {
   TEKST
   DOCX
+  /// Getranscribeerde gespreksopname. SourceDocument.extractedText bevat
+  /// uitsluitend het transcript (platte tekst) — de ruwe audio zelf wordt
+  /// nooit opgeslagen (niet op schijf, niet in de database); die leeft
+  /// alleen in-memory tijdens de transcriptie-aanroep. Zie
+  /// src/lib/ai/provider.ts (transcribeAudio) en
+  /// src/app/api/reports/[id]/sources/route.ts.
+  AUDIO
 }
 
 enum StatementCategory {

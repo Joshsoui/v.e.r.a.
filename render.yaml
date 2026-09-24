@@ -51,6 +51,8 @@ services:
         value: gpt-4.1-mini
       - key: OPENAI_TIMEOUT_MS
         value: "45000"
+      - key: OPENAI_TRANSCRIBE_MODEL
+        value: gpt-4o-transcribe
       # Leeg laten volstaat: de app valt automatisch terug op de door Render
       # geïnjecteerde RENDER_EXTERNAL_URL. Alleen invullen bij een eigen domein.
       - key: APP_BASE_URL
@@ -63,8 +65,14 @@ services:
         value: "10"
       - key: RATE_LIMIT_AUTH_WINDOW_MS
         value: "900000"
+      - key: RATE_LIMIT_TRANSCRIBE_MAX
+        value: "15"
+      - key: RATE_LIMIT_TRANSCRIBE_WINDOW_MS
+        value: "3600000"
       - key: MAX_UPLOAD_FILE_SIZE_BYTES
         value: "5000000"
+      - key: MAX_AUDIO_FILE_SIZE_BYTES
+        value: "25000000"
       - key: MAX_SOURCE_FILES_PER_REPORT
         value: "10"
       - key: MAX_TOTAL_INPUT_CHARS

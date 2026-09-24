@@ -194,7 +194,13 @@ al bereikte stappen aanklikbaar maakt:
    bij de retentie-purge wordt geleegd (zie hoofdstuk 4), nooit de permanente `title`.
 2. **Broninformatie** — aantekeningen plakken of `.docx`-bestanden uploaden, met validatie
    op bestandsgrootte, aantal bestanden en totale invoerlengte, en een live tekenteller
-   tegen `MAX_TOTAL_INPUT_CHARS` terwijl je typt/plakt.
+   tegen `MAX_TOTAL_INPUT_CHARS` terwijl je typt/plakt. Daarnaast kan hier een
+   **gespreksopname** toegevoegd worden — als bestaand audiobestand (upload) of live
+   opgenomen in de browser (`MediaRecorder`, met een timer en stop-knop). De opname wordt
+   direct via OpenAI's spraak-naar-tekst getranscribeerd; alleen het resulterende transcript
+   wordt als bron opgeslagen, precies zoals bij een geplakte tekst of geüpload document. De
+   **audio zelf wordt nooit bewaard** — niet op schijf, niet in de database — zie
+   "Gespreksopnames" in hoofdstuk 4 voor de precieze waarborgen.
 3. **VERA-analyse** — de AI structureert de bronnen tot een conceptverslag volgens het
    gekozen format (zie hoofdstuk 3).
 4. **Controle en bewerking** — elk hoofdstuk heeft een status
@@ -295,6 +301,37 @@ Dit is het meest kritieke onderdeel van V.E.R.A. en op meerdere niveaus afgedwon
   Beide zijn ook vanuit de UI bereikbaar: het account-menu op het dashboard voor alle
   eigen data, en een "Verwijderen"-knop per rapport in de rapportenlijst voor een los
   rapport.
+
+### Gespreksopnames
+
+Een gespreksopname kan als bron toegevoegd worden — bestaand bestand uploaden of live
+opnemen in de browser (`StepBronnen.tsx`, `MediaRecorder`). Dit raakt precies het
+privacygevoeligste deel van de tool (een stem is herleidbaarder dan getypte tekst), dus de
+waarborgen zijn bewust strikt:
+
+- **De ruwe audio wordt nooit opgeslagen** — niet op schijf, niet in de database, geen
+  losse tabel of blob-kolom. `SourceDocument` (zie hierboven) heeft alleen een
+  `extractedText`-kolom; er is bewust geen equivalent van `FormatTemplate.sourceDocx`
+  (waar wél bewust raw bytes bewaard blijven, maar dan als permanente organisatieconfiguratie,
+  nooit als per-cliënt dossierinhoud). De audio-`Buffer` bestaat uitsluitend in het
+  geheugen van de betreffende server-request (`POST /api/reports/:id/sources` →
+  `AIProvider.transcribeAudio()`, zie `src/lib/ai/openaiProvider.ts`) en is na het
+  terugsturen van het transcript niet meer bereikbaar — er is dus ook niets voor de
+  retentie-purge om op te ruimen.
+- **Alleen het transcript wordt bewaard**, met `SourceDocument.sourceType = AUDIO` — verder
+  identiek aan elke andere bron: hetzelfde `extractedText`/`charCount`, dezelfde
+  segmentatie in citeerbare stukjes, dezelfde retentietermijn en dezelfde
+  zero-fabrication-waarborgen (hoofdstuk 3). Er is geen aparte opslag- of retentielogica
+  nodig voor audio — dat volgt automatisch uit "er is niets anders dan tekst om te bewaren".
+- **Transcriptie is een externe API-aanroep** (OpenAI, `OPENAI_TRANSCRIBE_MODEL`, standaard
+  `gpt-4o-transcribe`) — hetzelfde vertrouwensmodel als de bestaande VERA-analyse: audio
+  verlaat tijdelijk de eigen infrastructuur naar OpenAI, wordt daar getranscribeerd, en
+  alleen de tekst komt terug. Apart gerate-limit (`RATE_LIMIT_TRANSCRIBE_MAX`/`_WINDOW_MS`)
+  t.o.v. de analyse-aanroep, want elke opname is een aparte, betaalde aanroep.
+- **Bewuste procesgrens, geen technische afdwinging**: een gesprek opnemen vereist
+  toestemming van de betrokkene(n) — dat is een gespreks-/procesverantwoordelijkheid van de
+  consulent zelf, de tool kan dat niet controleren of afdwingen. De upload-UI toont hier
+  wel een korte herinnering bij.
 
 ### Auth & autorisatie
 
@@ -689,6 +726,8 @@ van een softwareoplevering vallen:
   tekenteller tegen de invoerlimiet, een inklapbare brontekst-weergave en bewerkbare
   bronverwijzingen met "terug naar AI-versie" tijdens de controle-stap, en een optioneel
   eigen-referentieveld om rapporten in het dashboard uit elkaar te houden.
+- Gespreksopnames als bron: uploaden of live opnemen in de browser, automatisch
+  getranscribeerd — alleen het transcript wordt bewaard, de audio zelf nooit.
 - 5 geseede vakgebieden (Jeugd, Wmo, Participatie, Schuldhulpverlening, Leerplicht), elk met
   een eigen standaardformat, plus sjabloon-upload waarmee een organisatie een eigen
   .docx-sjabloon kan uploaden dat automatisch een nieuw, org-eigen format wordt — en bij
@@ -758,9 +797,10 @@ npm run start (op een test-poort) + curl-smoketest van de volledige flow
 
 **Al met werkende defaults in `render.yaml`** (pas aan indien gewenst):
 
-`NODE_ENV`, `AUTH_COOKIE_NAME`, `OPENAI_MODEL`, `OPENAI_TIMEOUT_MS`, `APP_BASE_URL`,
-`RATE_LIMIT_AI_MAX`, `RATE_LIMIT_AI_WINDOW_MS`, `RATE_LIMIT_AUTH_MAX`,
-`RATE_LIMIT_AUTH_WINDOW_MS`, `MAX_UPLOAD_FILE_SIZE_BYTES`, `MAX_SOURCE_FILES_PER_REPORT`,
+`NODE_ENV`, `AUTH_COOKIE_NAME`, `OPENAI_MODEL`, `OPENAI_TIMEOUT_MS`, `OPENAI_TRANSCRIBE_MODEL`,
+`APP_BASE_URL`, `RATE_LIMIT_AI_MAX`, `RATE_LIMIT_AI_WINDOW_MS`, `RATE_LIMIT_AUTH_MAX`,
+`RATE_LIMIT_AUTH_WINDOW_MS`, `RATE_LIMIT_TRANSCRIBE_MAX`, `RATE_LIMIT_TRANSCRIBE_WINDOW_MS`,
+`MAX_UPLOAD_FILE_SIZE_BYTES`, `MAX_AUDIO_FILE_SIZE_BYTES`, `MAX_SOURCE_FILES_PER_REPORT`,
 `MAX_TOTAL_INPUT_CHARS`, `REPORT_RETENTION_DAYS`, `RESEND_FROM_EMAIL`.
 
 Zie `.env.example` voor de volledige lijst met toelichting per variabele (voor lokaal
