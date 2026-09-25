@@ -268,6 +268,11 @@ Dit is het meest kritieke onderdeel van V.E.R.A. en op meerdere niveaus afgedwon
 
 ## 4. Privacy & security
 
+> **Documentatiepakket**: naast dit technische overzicht bevat
+> [`docs/privacy-security/`](./docs/privacy-security/README.md) kant-en-klare sjablonen
+> voor de organisatorische kant — privacyverklaring, DPIA, verwerkersovereenkomsten-
+> checklist en een niet-technisch beveiligingsoverzicht voor de FG.
+
 ### Privacy-by-design
 
 - **Dossierinhoud is tijdelijk.** `SourceDocument` (brontekst) en de inhoud van
@@ -682,15 +687,18 @@ geen databases-blok" blijft), of via een externe scheduler die inlogt op de serv
 
 Deze MVP is functioneel compleet, maar **werk pas met echte cliëntgegevens nadat onderstaande
 punten zijn afgevinkt** — dit vraagt organisatorische/juridische stappen die buiten de scope
-van een softwareoplevering vallen:
+van een softwareoplevering vallen. Voor de meeste punten hieronder staat een
+kant-en-klaar startpunt in [`docs/privacy-security/`](./docs/privacy-security/README.md):
 
 - [ ] **Verwerkersovereenkomst (VWO)** met OpenAI (of de gekozen AI-provider) afgesloten,
-      passend bij het verwerken van (bijzondere) persoonsgegevens van jeugdigen.
+      passend bij het verwerken van (bijzondere) persoonsgegevens van jeugdigen. Zie
+      [`docs/privacy-security/vwo-checklist.md`](./docs/privacy-security/vwo-checklist.md).
 - [ ] **Verwerkersovereenkomst met Supabase** (of de gekozen hostingpartij voor de
-      database) en met Render.
+      database) en met Render. Zie dezelfde checklist.
 - [ ] **DPIA (Data Protection Impact Assessment)** uitgevoerd — een onderzoeksverslag
       jeugdzorg bevat per definitie bijzondere persoonsgegevens; dit vereist een DPIA onder
-      de AVG.
+      de AVG. Zie
+      [`docs/privacy-security/dpia-sjabloon.md`](./docs/privacy-security/dpia-sjabloon.md).
 - [ ] **Functionaris Gegevensbescherming (FG)** van de gemeente heeft de toepassing
       beoordeeld en akkoord gegeven.
 - [ ] **Bewaartermijn** (`REPORT_RETENTION_DAYS`) afgestemd met de archiefwet/gemeentelijk
